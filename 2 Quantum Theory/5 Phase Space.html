@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Quantized Action Visual — Phase Space (q,p)</title>
+  <style>
+    :root { color-scheme: dark; }
+    body{
+      margin:0; background:#0b0f14; color:#e8eef6;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .wrap{
+      width:min(1100px, 95vw);
+      margin:14px auto;
+      display:grid; gap:12px;
+      grid-template-columns: 1.35fr 0.65fr;
+      align-items:start;
+    }
+    @media (max-width: 980px){ .wrap{ grid-template-columns:1fr; } }
+    .card{
+      background:#0f1622;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:14px;
+      padding:12px;
+      box-shadow: 0 10px 26px rgba(0,0,0,.25);
+    }
+    h1{ font-size:18px; margin:0 0 6px; }
+    .sub{ opacity:.85; font-size:13px; margin:0 0 10px; line-height:1.35; }
+    canvas{
+      width:100%;
+      height:auto;
+      border-radius:12px;
+      background: radial-gradient(1200px 800px at 30% 20%, rgba(120,180,255,.10), transparent 60%),
+                  radial-gradient(1000px 700px at 70% 80%, rgba(255,160,120,.08), transparent 60%),
+                  #0b0f14;
+      border:1px solid rgba(255,255,255,.08);
+      display:block;
+    }
+    .controls{ display:grid; gap:10px; }
+    .row{
+      display:grid; gap:6px;
+      padding:10px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.03);
+    }
+    .row label{
+      display:flex; justify-content:space-between; gap:10px;
+      font-size:13px; opacity:.92;
+    }
+    input[type="range"]{ width:100%; }
+    .btns{ display:flex; gap:8px; flex-wrap:wrap; }
+    button{
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      color:#e8eef6;
+      padding:8px 10px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:600;
+      font-size:13px;
+    }
+    button:hover{ background: rgba(255,255,255,.10); }
+    .pill{
+      display:inline-block; padding:2px 8px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.05);
+      font-size:12px; opacity:.95;
+    }
+    .kv{ display:grid; grid-template-columns: 1fr auto; gap:6px 10px; font-size:13px; }
+    .kv div:nth-child(odd){ opacity:.85; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .hint{ font-size:12px; opacity:.75; line-height:1.35; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Phase Space (q,p): Classical Orbit vs Quantized Action</h1>
+      <p class="sub">
+        For a 1-D harmonic oscillator, the motion makes a closed loop in phase space.
+        The “action” is the enclosed area: <span class="mono">I = ∮ p dq</span>.
+        Planck/Bohr-style quantization says: <span class="mono">I = n h</span>.
+      </p>
+      <canvas id="cv" width="980" height="640" aria-label="phase space canvas"></canvas>
+      <div class="hint" style="margin-top:8px">
+        Tip: Click inside the canvas to set a new energy (radius). Turn on “Snap to n·h” to force quantized orbits.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="controls">
+        <div class="row">
+          <div class="btns">
+            <button id="toggleRun">Pause</button>
+            <button id="reset">Reset</button>
+            <button id="randomize">Random energy</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <label>
+            <span>Energy / orbit size</span>
+            <span class="pill mono" id="Eread">E: —</span>
+          </label>
+          <input id="E" type="range" min="0.05" max="1.00" step="0.001" value="0.45">
+          <div class="hint">This sets the ellipse size. Bigger E ⇒ bigger phase-space area ⇒ larger action I.</div>
+        </div>
+
+        <div class="row">
+          <label>
+            <span>Oscillator parameters</span>
+            <span class="pill mono" id="paramsRead">m=1.00, ω=1.00</span>
+          </label>
+          <label><span>m (mass)</span><span class="mono" id="mRead">1.00</span></label>
+          <input id="m" type="range" min="0.25" max="3.00" step="0.01" value="1.00">
+          <label><span>ω (angular frequency)</span><span class="mono" id="wRead">1.00</span></label>
+          <input id="w" type="range" min="0.40" max="3.00" step="0.01" value="1.00">
+          <div class="hint">For a harmonic oscillator: action <span class="mono">I = 2πE/ω</span> (so ω changes the spacing).</div>
+        </div>
+
+        <div class="row">
+          <label>
+            <span>Quantization</span>
+            <span class="pill" id="modePill">Classical</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; font-size:13px;">
+            <input id="snap" type="checkbox">
+            <span>Snap orbit to nearest <span class="mono">n·h</span></span>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; font-size:13px;">
+            <input id="showLevels" type="checkbox" checked>
+            <span>Show quantized “allowed” loops</span>
+          </label>
+          <label>
+            <span>h (Planck-like unit)</span>
+            <span class="mono" id="hRead">0.20</span>
+          </label>
+          <input id="h" type="range" min="0.05" max="0.50" step="0.005" value="0.20">
+          <div class="hint">
+            This demo uses a scaled “h” so you can see discrete rings.
+            Real <span class="mono">h</span> is tiny, so levels look continuous at macroscales.
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="kv">
+            <div>Action (area) I = ∮ p dq</div><div class="mono" id="Iread">—</div>
+            <div>Nearest integer n</div><div class="mono" id="nRead">—</div>
+            <div>Quantized action n·h</div><div class="mono" id="nhRead">—</div>
+            <div>Mismatch |I − n·h|</div><div class="mono" id="dRead">—</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="hint">
+            What you’re seeing:
+            <ul style="margin:8px 0 0 18px; padding:0; line-height:1.4">
+              <li>The moving dot is the system’s state \((q(t),p(t))\).</li>
+              <li>The loop is one full period of motion.</li>
+              <li>The filled area is the “action” I (phase-space area).</li>
+              <li>Quantization forces only certain areas: <span class="mono">I = n·h</span>.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ---------- Canvas setup ----------
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+
+  function resizeCanvasToCSS() {
+    // Keep internal resolution crisp
+    const dpr = Math.max(1, Math.min(2.5, window.devicePixelRatio || 1));
+    const rect = cv.getBoundingClientRect();
+    const w = Math.max(520, Math.floor(rect.width));
+    const h = Math.floor(w * (640/980));
+    cv.style.height = h + 'px';
+    cv.width = Math.floor(w * dpr);
+    cv.height = Math.floor(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', resizeCanvasToCSS);
+  resizeCanvasToCSS();
+
+  // ---------- UI ----------
+  const Esl = document.getElementById('E');
+  const msl = document.getElementById('m');
+  const wsl = document.getElementById('w');
+  const hsl = document.getElementById('h');
+  const snap = document.getElementById('snap');
+  const showLevels = document.getElementById('showLevels');
+
+  const toggleRunBtn = document.getElementById('toggleRun');
+  const resetBtn = document.getElementById('reset');
+  const randomBtn = document.getElementById('randomize');
+
+  const Eread = document.getElementById('Eread');
+  const mRead = document.getElementById('mRead');
+  const wRead = document.getElementById('wRead');
+  const hRead = document.getElementById('hRead');
+  const paramsRead = document.getElementById('paramsRead');
+
+  const Iread = document.getElementById('Iread');
+  const nRead = document.getElementById('nRead');
+  const nhRead = document.getElementById('nhRead');
+  const dRead = document.getElementById('dRead');
+  const modePill = document.getElementById('modePill');
+
+  // ---------- Model ----------
+  // 1D harmonic oscillator: E = p^2/(2m) + (1/2)m ω^2 q^2
+  // Phase-space orbit is ellipse: q(t) = A cos(ωt+φ), p(t) = -mωA sin(ωt+φ)
+  // With E = (1/2)m ω^2 A^2  =>  A = sqrt(2E/(m ω^2))
+  // Action: I = ∮ p dq = 2πE/ω  (area of ellipse = π * A * (m ω A) = 2πE/ω)
+  let running = true;
+  let t = 0;
+  let phi = 0;
+
+  function getParams() {
+    const m = parseFloat(msl.value);
+    const w = parseFloat(wsl.value);
+    const h = parseFloat(hsl.value);
+    let E = parseFloat(Esl.value);
+
+    // If snapping, convert E so that action I matches nearest n·h
+    // I = 2πE/ω  ->  E = I ω /(2π)
+    const I = (2 * Math.PI * E) / w;
+    const n = Math.max(1, Math.round(I / h));
+    const Iq = n * h;
+
+    if (snap.checked) {
+      E = (Iq * w) / (2 * Math.PI);
+    }
+    return { m, w, h, E };
+  }
+
+  function fmt(x, digits=4) {
+    if (!isFinite(x)) return "—";
+    const abs = Math.abs(x);
+    if (abs >= 1000) return x.toFixed(0);
+    if (abs >= 100) return x.toFixed(1);
+    if (abs >= 10) return x.toFixed(2);
+    return x.toFixed(digits);
+  }
+
+  function updateReadouts() {
+    const { m, w, h, E } = getParams();
+    const I = (2*Math.PI*E)/w;
+    const n = Math.max(1, Math.round(I/h));
+    const nh = n*h;
+    const d = Math.abs(I - nh);
+
+    Eread.textContent = `E: ${fmt(E,4)}`;
+    mRead.textContent = fmt(m,2);
+    wRead.textContent = fmt(w,2);
+    hRead.textContent = fmt(h,3);
+    paramsRead.textContent = `m=${fmt(m,2)}, ω=${fmt(w,2)}`;
+
+    Iread.textContent = fmt(I,4);
+    nRead.textContent = String(n);
+    nhRead.textContent = fmt(nh,4);
+    dRead.textContent = fmt(d,4);
+
+    const qMode = snap.checked ? "Quantized (snapped)" : "Classical";
+    modePill.textContent = qMode;
+    modePill.style.background = snap.checked ? "rgba(120,255,170,.10)" : "rgba(255,255,255,.05)";
+    modePill.style.borderColor = snap.checked ? "rgba(120,255,170,.25)" : "rgba(255,255,255,.12)";
+  }
+
+  // ---------- Drawing helpers ----------
+  function drawGrid(x0,y0,w,h,step){
+    ctx.save();
+    ctx.globalAlpha = 0.28;
+    ctx.lineWidth = 1;
+    for(let x = x0; x <= x0+w+1e-6; x += step){
+      ctx.beginPath();
+      ctx.moveTo(x, y0);
+      ctx.lineTo(x, y0+h);
+      ctx.strokeStyle = "rgba(255,255,255,.08)";
+      ctx.stroke();
+    }
+    for(let y = y0; y <= y0+h+1e-6; y += step){
+      ctx.beginPath();
+      ctx.moveTo(x0, y);
+      ctx.lineTo(x0+w, y);
+      ctx.strokeStyle = "rgba(255,255,255,.08)";
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawAxes(cx,cy,w,h){
+    ctx.save();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgba(255,255,255,.18)";
+    // x axis
+    ctx.beginPath();
+    ctx.moveTo(cx - w/2, cy);
+    ctx.lineTo(cx + w/2, cy);
+    ctx.stroke();
+    // y axis
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - h/2);
+    ctx.lineTo(cx, cy + h/2);
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(255,255,255,.8)";
+    ctx.font = "12px ui-monospace, Menlo, Monaco, Consolas, monospace";
+    ctx.fillText("q", cx + w/2 - 14, cy - 8);
+    ctx.fillText("p", cx + 8, cy - h/2 + 14);
+    ctx.restore();
+  }
+
+  function ellipsePath(cx, cy, rx, ry){
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI*2);
+  }
+
+  function drawLabel(text, x, y){
+    ctx.save();
+    ctx.font = "12px ui-monospace, Menlo, Monaco, Consolas, monospace";
+    const pad = 6;
+    const m = ctx.measureText(text);
+    const tw = m.width;
+    ctx.fillStyle = "rgba(10,14,20,.65)";
+    ctx.strokeStyle = "rgba(255,255,255,.12)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x, y, tw + pad*2, 20, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,.85)";
+    ctx.fillText(text, x + pad, y + 14);
+    ctx.restore();
+  }
+
+  // roundRect polyfill
+  if (!CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r){
+      const rr = Math.min(r, w/2, h/2);
+      this.beginPath();
+      this.moveTo(x+rr, y);
+      this.arcTo(x+w, y, x+w, y+h, rr);
+      this.arcTo(x+w, y+h, x, y+h, rr);
+      this.arcTo(x, y+h, x, y, rr);
+      this.arcTo(x, y, x+w, y, rr);
+      this.closePath();
+      return this;
+    }
+  }
+
+  // ---------- Main render ----------
+  function render(dt){
+    const rect = cv.getBoundingClientRect();
+    const W = rect.width;
+    const H = rect.height;
+
+    ctx.clearRect(0,0,W,H);
+
+    // panel area
+    const pad = 18;
+    const pw = W - pad*2;
+    const ph = H - pad*2;
+    const cx = pad + pw*0.52;
+    const cy = pad + ph*0.54;
+
+    // coordinate scaling region
+    const plotW = pw*0.92;
+    const plotH = ph*0.84;
+
+    // background grid
+    drawGrid(cx - plotW/2, cy - plotH/2, plotW, plotH, Math.max(26, plotW/18));
+    drawAxes(cx,cy,plotW,plotH);
+
+    const { m, w, h, E } = getParams();
+    updateReadouts();
+
+    // Convert oscillator parameters to orbit ellipse radii in plot coords
+    // Physical:
+    // Aq = sqrt(2E/(m w^2)),   Ap = m w Aq = sqrt(2 m E)
+    const Aq = Math.sqrt( Math.max(0, (2*E)/(m*w*w)) );
+    const Ap = Math.sqrt( Math.max(0, 2*m*E) );
+
+    // Normalize to fit plot nicely: choose max range based on current + a bit headroom.
+    // We'll compute a scale factor so Aq and Ap map to radii.
+    const qMax = Math.max(0.35, Aq*1.35);
+    const pMax = Math.max(0.35, Ap*1.35);
+
+    const sx = (plotW/2) / qMax;  // q -> x
+    const sy = (plotH/2) / pMax;  // p -> y
+
+    const rx = Aq * sx;
+    const ry = Ap * sy;
+
+    // Draw quantized allowed loops (rings of constant action) if enabled
+    if (showLevels.checked) {
+      const I = (2*Math.PI*E)/w;
+      const nCenter = Math.max(1, Math.round(I/h));
+      // Show a small neighborhood of levels around current n
+      const nMin = Math.max(1, nCenter - 6);
+      const nMax = nCenter + 6;
+
+      for (let n = nMin; n <= nMax; n++) {
+        // I_n = n h -> E_n = I_n w /(2π)
+        const En = (n*h*w)/(2*Math.PI);
+        const Aqn = Math.sqrt( Math.max(0, (2*En)/(m*w*w)) );
+        const Apn = Math.sqrt( Math.max(0, 2*m*En) );
+
+        const rxn = Aqn * sx;
+        const ryn = Apn * sy;
+
+        // Fade with distance from current level
+        const dn = Math.abs(n - nCenter);
+        const alpha = Math.max(0.05, 0.22 - dn*0.02);
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.lineWidth = (n === nCenter ? 2.2 : 1.2);
+        ctx.setLineDash(n === nCenter ? [] : [6,6]);
+        ctx.strokeStyle = (n === nCenter)
+          ? "rgba(130,255,185,.60)"
+          : "rgba(255,255,255,.22)";
+        ellipsePath(cx, cy, rxn, ryn);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // Draw current orbit (classical OR snapped-to-quantized)
+    // Fill area to visually represent action as "area in phase space"
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = snap.checked ? "rgba(120,255,170,.30)" : "rgba(120,180,255,.28)";
+    ellipsePath(cx, cy, rx, ry);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.lineWidth = 2.6;
+    ctx.strokeStyle = snap.checked ? "rgba(120,255,170,.95)" : "rgba(140,190,255,.95)";
+    ctx.setLineDash([]);
+    ellipsePath(cx, cy, rx, ry);
+    ctx.stroke();
+    ctx.restore();
+
+    // Animate the state point moving along orbit
+    if (running) t += dt;
+    // frequency w, time in seconds
+    const ang = w*t + phi;
+
+    const q = Aq * Math.cos(ang);
+    const p = -m*w*Aq * Math.sin(ang); // equivalent to -Ap sin(ang)
+    const x = cx + q * sx;
+    const y = cy - p * sy; // minus because canvas y down
+
+    // Draw trace tail
+    const tailN = 80;
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(255,255,255,.20)";
+    ctx.beginPath();
+    for (let i=0; i<tailN; i++){
+      const a = w*(t - (tailN-i)*0.012) + phi;
+      const qq = Aq * Math.cos(a);
+      const pp = -m*w*Aq * Math.sin(a);
+      const xx = cx + qq*sx;
+      const yy = cy - pp*sy;
+      if (i===0) ctx.moveTo(xx,yy);
+      else ctx.lineTo(xx,yy);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // Dot
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,.95)";
+    ctx.beginPath();
+    ctx.arc(x,y,5.6,0,Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,.35)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+
+    // Labels
+    const I = (2*Math.PI*E)/w;
+    const n = Math.max(1, Math.round(I/h));
+    const nh = n*h;
+
+    drawLabel(`I = ∮p dq ≈ ${fmt(I,4)}`, pad+14, pad+12);
+    drawLabel(`Nearest n = ${n}  →  n·h = ${fmt(nh,4)}`, pad+14, pad+36);
+
+    // Small legend
+    ctx.save();
+    ctx.font = "12px ui-monospace, Menlo, Monaco, Consolas, monospace";
+    ctx.fillStyle = "rgba(255,255,255,.78)";
+    ctx.fillText("Phase space loop = one period", pad+14, H - pad - 34);
+    ctx.fillText("Filled area ~ action (quantized in chunks of h)", pad+14, H - pad - 18);
+    ctx.restore();
+  }
+
+  // ---------- Interaction ----------
+  // Click to set a new energy based on radius in phase space.
+  cv.addEventListener('pointerdown', (e) => {
+    const rect = cv.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    // Estimate E from clicked point as if it lies on orbit:
+    // Convert canvas point -> q,p using current scaling derived from current E.
+    // We'll use current params, compute scales, then infer E from q,p:
+    const { m, w } = getParams();
+
+    // We need the plot geometry:
+    const W = rect.width, H = rect.height;
+    const pad = 18;
+    const pw = W - pad*2;
+    const ph = H - pad*2;
+    const cx = pad + pw*0.52;
+    const cy = pad + ph*0.54;
+    const plotW = pw*0.92;
+    const plotH = ph*0.84;
+
+    // Use a provisional range scale based on current slider E (not snapped), to get units.
+    // This keeps interaction stable.
+    const E0 = parseFloat(Esl.value);
+    const Aq0 = Math.sqrt(Math.max(0,(2*E0)/(m*w*w)));
+    const Ap0 = Math.sqrt(Math.max(0,2*m*E0));
+    const qMax = Math.max(0.35, Aq0*1.35);
+    const pMax = Math.max(0.35, Ap0*1.35);
+
+    const sx = (plotW/2) / qMax;
+    const sy = (plotH/2) / pMax;
+
+    const q = (mx - cx) / sx;
+    const p = -(my - cy) / sy;
+
+    // Energy from (q,p): E = p^2/(2m) + 1/2 m w^2 q^2
+    const Enew = (p*p)/(2*m) + 0.5*m*w*w*q*q;
+
+    Esl.value = Math.min(parseFloat(Esl.max), Math.max(parseFloat(Esl.min), Enew)).toFixed(4);
+    // Also shift phase so dot is near clicked angle (optional)
+    phi = Math.atan2(-(p)/(m*w), q); // because p = -m w A sin; q=A cos
+  });
+
+  function reset() {
+    t = 0;
+    phi = 0;
+    Esl.value = "0.45";
+    msl.value = "1.00";
+    wsl.value = "1.00";
+    hsl.value = "0.20";
+    snap.checked = false;
+    showLevels.checked = true;
+    running = true;
+    toggleRunBtn.textContent = "Pause";
+  }
+
+  toggleRunBtn.addEventListener('click', () => {
+    running = !running;
+    toggleRunBtn.textContent = running ? "Pause" : "Play";
+  });
+  resetBtn.addEventListener('click', reset);
+  randomBtn.addEventListener('click', () => {
+    const r = 0.08 + Math.random()*0.92;
+    Esl.value = r.toFixed(4);
+    phi = Math.random()*Math.PI*2;
+  });
+
+  // Any UI change updates immediately
+  for (const el of [Esl, msl, wsl, hsl, snap, showLevels]) {
+    el.addEventListener('input', () => {});
+    el.addEventListener('change', () => {});
+  }
+
+  // ---------- Animation loop ----------
+  let last = performance.now();
+  function loop(now){
+    const dt = Math.min(0.05, (now-last)/1000);
+    last = now;
+    render(dt);
+    requestAnimationFrame(loop);
+  }
+  reset();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

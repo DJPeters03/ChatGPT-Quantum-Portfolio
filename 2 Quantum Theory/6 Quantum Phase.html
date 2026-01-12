@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Resonator + Light Streams + Electron Jumps (E=hν)</title>
+  <style>
+    :root{ color-scheme: dark; }
+    *{ box-sizing: border-box; }
+    body{
+      margin:0; background:#0b0f14; color:#e8eef6;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .wrap{
+      max-width: 1200px; margin: 14px auto; padding: 0 14px;
+      display: grid; gap: 12px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 980px){
+      .wrap{ grid-template-columns: 1.25fr 0.75fr; align-items:start; }
+    }
+    .card{
+      background: #0f1621; border: 1px solid #1f2a3a; border-radius: 14px;
+      padding: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.28);
+    }
+    h1{ font-size: 16px; margin: 0 0 8px; letter-spacing: .2px; }
+    .sub{ color:#a8b3c7; font-size: 12px; margin: 0 0 10px; line-height: 1.35; }
+    canvas{
+      width: 100%; height: 560px; display:block;
+      border-radius: 12px; background: radial-gradient(1200px 700px at 50% 45%, #0d1420 0%, #090d12 70%, #070a0e 100%);
+      border: 1px solid #1f2a3a;
+    }
+    .grid{
+      display:grid; gap:10px;
+      grid-template-columns: 1fr;
+    }
+    .row{
+      display:grid; gap:10px;
+      grid-template-columns: 1fr 1fr;
+    }
+    label{ font-size: 12px; color:#cbd5e1; display:block; margin-bottom: 6px; }
+    input[type="range"]{ width:100%; }
+    .pill{
+      display:inline-flex; gap:8px; align-items:center;
+      font-size: 12px; color:#cbd5e1;
+      background:#0c1220; border:1px solid #1f2a3a; border-radius: 999px;
+      padding:6px 10px;
+    }
+    .btns{ display:flex; gap:10px; flex-wrap:wrap; }
+    button{
+      background:#0c1220; color:#e8eef6;
+      border:1px solid #1f2a3a; border-radius: 10px;
+      padding:8px 10px; cursor:pointer;
+    }
+    button:hover{ border-color:#2f415b; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .small{ font-size: 12px; color:#a8b3c7; line-height:1.45; }
+    .kv{
+      display:grid; grid-template-columns: 1fr auto; gap:8px;
+      padding:8px 10px; border-radius: 12px;
+      background:#0c1220; border:1px solid #1f2a3a;
+      font-size: 12px;
+    }
+    .kv b{ font-weight: 650; }
+    .hint{
+      margin-top:10px;
+      border-left: 3px solid #2f415b;
+      padding:8px 10px;
+      background:#0c1220;
+      border-radius: 12px;
+      border:1px solid #1f2a3a;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Resonator with Light Streams + Electron Energy Jumps</h1>
+      <p class="sub">
+        Photons stream around the resonator. When one hits, the electron can absorb it (jump up) or emit (jump down).
+        Energy shown is <span class="mono">E = h·ν</span> (visualized, scaled).
+      </p>
+      <canvas id="c"></canvas>
+    </div>
+
+    <div class="card">
+      <h1>Controls</h1>
+      <div class="grid">
+        <div class="row">
+          <div>
+            <label>Frequency ν (higher → higher photon energy)</label>
+            <input id="freq" type="range" min="1" max="100" value="42" />
+          </div>
+          <div>
+            <label>Intensity (photon rate)</label>
+            <input id="intensity" type="range" min="1" max="100" value="55" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Jump Likelihood (absorb/emit probability)</label>
+            <input id="jump" type="range" min="0" max="100" value="65" />
+          </div>
+          <div>
+            <label>Resonator “Q” (how long it rings / stores energy)</label>
+            <input id="q" type="range" min="5" max="100" value="60" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Light Stream Speed</label>
+            <input id="speed" type="range" min="10" max="240" value="120" />
+          </div>
+          <div>
+            <label>Electron Level Count</label>
+            <input id="levels" type="range" min="3" max="8" value="5" />
+          </div>
+        </div>
+
+        <div class="btns">
+          <button id="toggle">Pause</button>
+          <button id="burst">Photon Burst</button>
+          <button id="reset">Reset</button>
+        </div>
+
+        <div class="kv">
+          <div><b>Photon energy (scaled)</b> <span class="mono">E = h·ν</span></div>
+          <div class="mono" id="E">—</div>
+        </div>
+        <div class="kv">
+          <div><b>Electron level</b></div>
+          <div class="mono" id="lvl">—</div>
+        </div>
+        <div class="kv">
+          <div><b>Resonator stored energy</b></div>
+          <div class="mono" id="store">—</div>
+        </div>
+
+        <div class="hint small">
+          <b>What you’re seeing:</b><br/>
+          • The center is a “resonator” (think: atom cavity / antenna / optical cavity).<br/>
+          • Light streams are photons moving around it with labeled energies.<br/>
+          • When photons interact, the electron jumps between discrete rings (energy levels).<br/>
+          • Resonator stored energy decays depending on Q (higher Q = longer ring).
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ===== Canvas setup =====
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+
+  function resize(){
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const rect = canvas.getBoundingClientRect();
+    canvas.width  = Math.floor(rect.width  * dpr);
+    canvas.height = Math.floor(rect.height * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0); // draw in CSS pixels
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  // ===== UI =====
+  const elFreq = document.getElementById("freq");
+  const elIntensity = document.getElementById("intensity");
+  const elJump = document.getElementById("jump");
+  const elQ = document.getElementById("q");
+  const elSpeed = document.getElementById("speed");
+  const elLevels = document.getElementById("levels");
+
+  const outE = document.getElementById("E");
+  const outLvl = document.getElementById("lvl");
+  const outStore = document.getElementById("store");
+
+  const btnToggle = document.getElementById("toggle");
+  const btnBurst = document.getElementById("burst");
+  const btnReset = document.getElementById("reset");
+
+  // ===== Physics-ish constants (visual scaling) =====
+  // We'll use a "visual Planck constant" so the numbers are friendly on screen.
+  // Real h ≈ 6.626e-34 J·s, but we scale it.
+  const hVisual = 0.13; // purely visual scaling
+
+  // ===== Simulation state =====
+  let paused = false;
+  let tPrev = performance.now();
+
+  const photons = [];
+  const sparks = [];
+
+  const state = {
+    storedEnergy: 20,        // resonator energy storage (visual units)
+    storedEnergyMax: 250,
+    electronLevel: 0,        // 0..levels-1
+    electronPhase: 0,        // orbit angle
+    ringPhase: 0,
+    messageTTL: 0,
+    messageText: "",
+  };
+
+  function rand(a,b){ return a + Math.random()*(b-a); }
+  function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+
+  function currentParams(){
+    const nu = Number(elFreq.value);                 // 1..100
+    const intensity = Number(elIntensity.value);     // 1..100
+    const jump = Number(elJump.value) / 100;         // 0..1
+    const Q = Number(elQ.value);                     // 5..100
+    const speed = Number(elSpeed.value);             // 10..240
+    const levels = Number(elLevels.value);           // 3..8
+
+    // Visual photon energy from Planck relation
+    const E = hVisual * nu; // visual energy units
+
+    // Spawn rate (photons/sec) grows with intensity
+    const spawnRate = 1.2 + intensity * 0.22; // ~1.4..23.2
+
+    // Decay per second: higher Q -> slower decay
+    const decayRate = 0.25 + (105 - Q) * 0.010; // ~0.25..1.25 per sec
+
+    // A "resonator radius" and electron levels spacing
+    const resonatorRadius = 72;
+    const levelGap = 22;
+
+    return {nu, intensity, jump, Q, speed, levels, E, spawnRate, decayRate, resonatorRadius, levelGap};
+  }
+
+  function setMessage(text, ttl=1.1){
+    state.messageText = text;
+    state.messageTTL = ttl;
+  }
+
+  // ===== Photon model =====
+  // Photons circle around the resonator in flowing streams.
+  // Each photon has an orbit radius, angle, angular velocity, and energy.
+  function spawnPhoton(burst=false){
+    const {E, speed, resonatorRadius} = currentParams();
+    const w = canvas.getBoundingClientRect().width;
+    const h = canvas.getBoundingClientRect().height;
+
+    const cx = w*0.5, cy = h*0.5;
+
+    // Create a "stream ring" around the resonator
+    const ringR = resonatorRadius + rand(60, 210);
+    const angle = rand(0, Math.PI*2);
+
+    // Angular speed relates to speed slider, and inversely to ring radius
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    const angVel = dir * (speed/120) * (120 / ringR) * rand(0.8, 1.4);
+
+    // slight radial drift so streams feel alive
+    const drift = rand(-12, 12);
+
+    photons.push({
+      cx, cy,
+      ringR,
+      ringR0: ringR,
+      angle,
+      angVel,
+      drift,
+      energy: E * rand(0.85, 1.2),
+      life: burst ? rand(3.0, 5.2) : rand(2.3, 4.2),
+      tag: burst ? "BURST" : ""
+    });
+  }
+
+  function photonBurst(){
+    for(let i=0;i<26;i++) spawnPhoton(true);
+    setMessage("Photon burst: resonator hit rate ↑", 1.4);
+  }
+
+  // ===== Electron energy levels =====
+  function levelEnergy(levelIndex, levels){
+    // Make energy steps non-linear (like a stylized atom/cavity)
+    // E_n grows with n^2 for visual drama.
+    const n = levelIndex + 1;
+    return 8 + 6.5 * n*n; // visual units
+  }
+
+  function tryElectronInteraction(dt){
+    const {jump, levels, E} = currentParams();
+
+    // Interaction chance rises with photon density and stored energy
+    // (this is just to make it feel reactive)
+    const photonDensity = clamp(photons.length / 40, 0, 2.0);
+    const baseP = (0.35 + 0.35*photonDensity) * jump; // per second-ish
+
+    if(Math.random() < baseP * dt){
+      // Decide absorb or emit based on storedEnergy and current level
+      const atTop = state.electronLevel >= levels - 1;
+      const atBottom = state.electronLevel <= 0;
+
+      const wantAbsorb = !atTop && (Math.random() < 0.62);
+      const wantEmit   = !atBottom && !wantAbsorb;
+
+      if(wantAbsorb){
+        // Need enough photon energy to go up (threshold-ish)
+        const next = state.electronLevel + 1;
+        const dE = levelEnergy(next, levels) - levelEnergy(state.electronLevel, levels);
+        const ok = (E * rand(0.85,1.25)) >= (dE * 0.45); // visual threshold
+        if(ok){
+          state.electronLevel = next;
+          state.storedEnergy = clamp(state.storedEnergy + dE*0.55, 0, state.storedEnergyMax);
+          setMessage(`ABSORB: electron jumped up (+ΔE)`, 0.9);
+          makeSpark("absorb");
+          drainNearbyPhotonEnergy(0.55);
+        } else {
+          // not enough energy: no jump, tiny wobble
+          setMessage(`No jump (photon energy below threshold)`, 0.65);
+          makeSpark("ping");
+        }
+      } else if(wantEmit){
+        const prev = state.electronLevel - 1;
+        const dE = levelEnergy(state.electronLevel, levels) - levelEnergy(prev, levels);
+        state.electronLevel = prev;
+        state.storedEnergy = clamp(state.storedEnergy - dE*0.35, 0, state.storedEnergyMax);
+        setMessage(`EMIT: electron jumped down (-ΔE)`, 0.9);
+        makeSpark("emit");
+        emitPhotonFromResonator(dE);
+      }
+    }
+  }
+
+  function drainNearbyPhotonEnergy(amount){
+    // Reduce a random photon's energy (visual) to represent absorption.
+    if(!photons.length) return;
+    const k = (Math.random() * photons.length) | 0;
+    photons[k].energy *= (1 - clamp(amount, 0.05, 0.9));
+    photons[k].life *= 0.65;
+  }
+
+  function emitPhotonFromResonator(dE){
+    // Create a photon stream closer to the resonator
+    const p = currentParams();
+    const w = canvas.getBoundingClientRect().width;
+    const h = canvas.getBoundingClientRect().height;
+    const cx = w*0.5, cy = h*0.5;
+    const ringR = p.resonatorRadius + rand(40, 90);
+    const angle = rand(0, Math.PI*2);
+    const dir = Math.random()<0.5?-1:1;
+    const angVel = dir * (p.speed/120) * (150 / ringR) * rand(1.0, 1.7);
+
+    photons.push({
+      cx, cy,
+      ringR,
+      ringR0: ringR,
+      angle,
+      angVel,
+      drift: rand(-8,8),
+      energy: clamp(dE * 0.18 + p.E*0.25, 2, 45),
+      life: rand(1.2, 2.4),
+      tag: "EMIT"
+    });
+  }
+
+  // ===== Visual effects =====
+  function makeSpark(kind){
+    const w = canvas.getBoundingClientRect().width;
+    const h = canvas.getBoundingClientRect().height;
+    const cx = w*0.5, cy = h*0.5;
+    sparks.push({
+      kind,
+      x: cx + rand(-6,6),
+      y: cy + rand(-6,6),
+      t: 0,
+      life: rand(0.35, 0.65),
+      r: rand(18, 34)
+    });
+  }
+
+  // ===== Drawing helpers =====
+  function drawText(x,y,text,alpha=1, align="left"){
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.textAlign = align;
+    ctx.textBaseline = "middle";
+    ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
+    ctx.fillStyle = "#e8eef6";
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+
+  function drawGlowCircle(x,y,r,alpha){
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    const g = ctx.createRadialGradient(x,y,0,x,y,r);
+    g.addColorStop(0, "rgba(140,190,255,0.22)");
+    g.addColorStop(1, "rgba(140,190,255,0.00)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  function clear(){
+    const w = canvas.getBoundingClientRect().width;
+    const h = canvas.getBoundingClientRect().height;
+    ctx.clearRect(0,0,w,h);
+
+    // subtle starfield
+    ctx.save();
+    ctx.globalAlpha = 0.06;
+    for(let i=0;i<90;i++){
+      const x = (i*97 % 1000)/1000 * w;
+      const y = (i*193 % 1000)/1000 * h;
+      ctx.fillStyle = "white";
+      ctx.fillRect(x, y, 1, 1);
+    }
+    ctx.restore();
+  }
+
+  function drawResonator(){
+    const p = currentParams();
+    const w = canvas.getBoundingClientRect().width;
+    const h = canvas.getBoundingClientRect().height;
+    const cx = w*0.5, cy = h*0.5;
+
+    // stored energy glow
+    const glow = clamp(state.storedEnergy / p.storedEnergyMax, 0, 1);
+    drawGlowCircle(cx,cy, 180, 0.18 + 0.40*glow);
+
+    // resonator body
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // outer ring (cavity)
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(200,230,255,0.35)";
+    ctx.beginPath();
+    ctx.arc(0,0, p.resonatorRadius, 0, Math.PI*2);
+    ctx.stroke();
+
+    // inner core
+    ctx.fillStyle = "rgba(120,180,255,0.08)";
+    ctx.beginPath();
+    ctx.arc(0,0, p.resonatorRadius*0.72, 0, Math.PI*2);
+    ctx.fill();
+
+    // “standing wave” arcs
+    state.ringPhase += 0.8 * (1/60);
+    const lobes = 10;
+    for(let i=0;i<lobes;i++){
+      const a0 = (i/lobes)*Math.PI*2 + state.ringPhase*0.9;
+      const a1 = a0 + Math.PI*2/lobes*0.55;
+      const amp = 6 + glow*10;
+      const rr = p.resonatorRadius*0.86 + Math.sin(state.ringPhase*2 + i)*amp;
+      ctx.strokeStyle = "rgba(140,190,255,0.14)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0,0, rr, a0, a1);
+      ctx.stroke();
+    }
+
+    // label
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = "#e8eef6";
+    ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New', monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("RESONATOR", 0, p.resonatorRadius + 22);
+
+    ctx.restore();
+
+    // Sparks
+    for(const s of sparks){
+      const a = 1 - (s.t / s.life);
+      drawGlowCircle(cx, cy, s.r, 0.25*a);
+      ctx.save();
+      ctx.globalAlpha = 0.18*a;
+      ctx.strokeStyle = "rgba(180,220,255,0.8)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx,cy, p.resonatorRadius + 14 + (s.t*60), 0, Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawEnergyLevelsAndElectron(){
+    const p = currentParams();
+    const w = canvas.getBoundingClientRect().width;
+    const h = canvas.getBoundingClientRect().height;
+    const cx = w*0.5, cy = h*0.5;
+
+    const levels = p.levels;
+    const baseR = p.resonatorRadius + 10;
+
+    // Draw rings (energy levels)
+    for(let i=0;i<levels;i++){
+      const r = baseR + i*p.levelGap;
+      const isActive = (i === state.electronLevel);
+      ctx.save();
+      ctx.lineWidth = isActive ? 2.6 : 1.4;
+      ctx.strokeStyle = isActive ? "rgba(220,245,255,0.55)" : "rgba(180,210,255,0.16)";
+      ctx.setLineDash(isActive ? [] : [6, 8]);
+      ctx.beginPath();
+      ctx.arc(cx,cy, r, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+
+      // Level energy number (left side)
+      const En = levelEnergy(i, levels);
+      drawText(cx - r - 10, cy - 2, `E${i+1}=${En.toFixed(1)}`, 0.65, "right");
+    }
+
+    // Electron orbiting on active ring
+    state.electronPhase += 0.9 * (1/60);
+    const rActive = baseR + state.electronLevel*p.levelGap;
+
+    const ex = cx + Math.cos(state.electronPhase*2.2) * rActive;
+    const ey = cy + Math.sin(state.electronPhase*2.2) * rActive;
+
+    // Electron glow + dot
+    drawGlowCircle(ex, ey, 34, 0.26);
+    ctx.save();
+    ctx.fillStyle = "rgba(240,250,255,0.92)";
+    ctx.beginPath(); ctx.arc(ex,ey, 5.2, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    drawText(ex, ey - 14, "e⁻", 0.85, "center");
+  }
+
+  function drawPhotons(){
+    const p = currentParams();
+    const w = canvas.getBoundingClientRect().width;
+    const h = canvas.getBoundingClientRect().height;
+    const cx = w*0.5, cy = h*0.5;
+
+    for(const ph of photons){
+      // photon position on its orbit ring
+      const x = cx + Math.cos(ph.angle) * ph.ringR;
+      const y = cy + Math.sin(ph.angle) * ph.ringR;
+
+      // energy drives glow radius and alpha
+      const eN = clamp(ph.energy / Math.max(1, p.E), 0.2, 2.4);
+      const a = clamp(ph.life / 4.0, 0, 1);
+
+      // glow
+      drawGlowCircle(x,y, 18 + 18*eN, 0.10*a);
+
+      // photon dot
+      ctx.save();
+      ctx.globalAlpha = 0.55*a;
+      ctx.fillStyle = "rgba(170,220,255,1)";
+      ctx.beginPath(); ctx.arc(x,y, 2.4 + 0.9*eN, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+
+      // trailing streak (light stream)
+      const tx = cx + Math.cos(ph.angle - ph.angVel*0.18) * (ph.ringR-2);
+      const ty = cy + Math.sin(ph.angle - ph.angVel*0.18) * (ph.ringR-2);
+
+      ctx.save();
+      ctx.globalAlpha = 0.22*a;
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(150,210,255,1)";
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      ctx.restore();
+
+      // energy label near some photons (to avoid clutter)
+      if(Math.random() < 0.08){
+        drawText(x + 10, y, `E=${ph.energy.toFixed(2)}`, 0.55*a, "left");
+      }
+
+      // If close to resonator surface, "hit chance"
+      const distFromCenter = Math.hypot(x - cx, y - cy);
+      const hitBand = Math.abs(distFromCenter - p.resonatorRadius);
+      if(hitBand < 10 && Math.random() < 0.015){
+        // add stored energy a bit (resonator picks up energy)
+        state.storedEnergy = clamp(state.storedEnergy + ph.energy*0.4, 0, state.storedEnergyMax);
+        // shorten photon life (absorbed/scattered)
+        ph.life *= 0.7;
+        makeSpark("ping");
+      }
+    }
+  }
+
+  function drawOverlay(){
+    const p = currentParams();
+    const w = canvas.getBoundingClientRect().width;
+    const h = canvas.getBoundingClientRect().height;
+
+    // Top-left HUD
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = "rgba(12,18,32,0.62)";
+    ctx.strokeStyle = "rgba(31,42,58,0.9)";
+    ctx.lineWidth = 1;
+    const pad = 10;
+    const boxW = 360;
+    const boxH = 86;
+    ctx.beginPath();
+    roundRect(ctx, pad, pad, boxW, boxH, 12);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    const nu = p.nu;
+    const E = p.E;
+    const lvl = state.electronLevel + 1;
+
+    drawText(18, 28, `ν = ${nu.toFixed(0)}  (frequency)`, 0.9, "left");
+    drawText(18, 48, `Photon: E = h·ν = ${E.toFixed(2)} (scaled)`, 0.9, "left");
+    drawText(18, 68, `Electron level: ${lvl}/${p.levels}`, 0.9, "left");
+
+    // Center message
+    if(state.messageTTL > 0){
+      const a = clamp(state.messageTTL / 1.2, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = 0.65*a;
+      ctx.fillStyle = "rgba(12,18,32,0.70)";
+      ctx.strokeStyle = "rgba(31,42,58,0.9)";
+      ctx.lineWidth = 1;
+      const mw = 520, mh = 44;
+      roundRect(ctx, (w-mw)/2, 16, mw, mh, 12);
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.globalAlpha = 0.95*a;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "13px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New', monospace";
+      ctx.fillStyle = "#e8eef6";
+      ctx.fillText(state.messageText, w/2, 38);
+      ctx.restore();
+    }
+  }
+
+  function roundRect(ctx, x, y, w, h, r){
+    const rr = Math.min(r, w/2, h/2);
+    ctx.moveTo(x+rr, y);
+    ctx.arcTo(x+w, y,   x+w, y+h, rr);
+    ctx.arcTo(x+w, y+h, x,   y+h, rr);
+    ctx.arcTo(x,   y+h, x,   y,   rr);
+    ctx.arcTo(x,   y,   x+w, y,   rr);
+    ctx.closePath();
+  }
+
+  // ===== Update loop =====
+  function update(dt){
+    const p = currentParams();
+
+    // UI outputs
+    outE.textContent = p.E.toFixed(3);
+    outLvl.textContent = `${state.electronLevel+1} / ${p.levels}`;
+    outStore.textContent = `${state.storedEnergy.toFixed(1)} / ${p.storedEnergyMax}`;
+
+    // decay resonator energy (Q factor)
+    state.storedEnergy = clamp(state.storedEnergy - p.decayRate * dt * (0.6 + 0.6*(state.storedEnergy/p.storedEnergyMax)), 0, p.storedEnergyMax);
+
+    // spawn photons
+    const spawnP = p.spawnRate * dt;
+    const n = Math.floor(spawnP);
+    const extra = spawnP - n;
+    for(let i=0;i<n;i++) spawnPhoton(false);
+    if(Math.random() < extra) spawnPhoton(false);
+
+    // update photons
+    for(const ph of photons){
+      ph.angle += ph.angVel * dt;
+      ph.ringR += ph.drift * dt * 0.25;
+      // pull ringR gently back to ringR0 so drift doesn't run away
+      ph.ringR += (ph.ringR0 - ph.ringR) * dt * 0.15;
+
+      // energy slowly dissipates
+      ph.energy *= (1 - dt*0.035);
+      ph.life -= dt;
+    }
+    // remove dead photons
+    for(let i=photons.length-1;i>=0;i--){
+      if(photons[i].life <= 0 || photons[i].energy < 0.15) photons.splice(i,1);
+    }
+
+    // sparks
+    for(const s of sparks){
+      s.t += dt;
+    }
+    for(let i=sparks.length-1;i>=0;i--){
+      if(sparks[i].t >= sparks[i].life) sparks.splice(i,1);
+    }
+
+    // message TTL
+    if(state.messageTTL > 0) state.messageTTL = Math.max(0, state.messageTTL - dt);
+
+    // electron interactions
+    tryElectronInteraction(dt);
+
+    // keep electron level valid if user reduces level count
+    if(state.electronLevel > p.levels-1) state.electronLevel = p.levels-1;
+  }
+
+  function render(){
+    clear();
+    drawPhotons();
+    drawResonator();
+    drawEnergyLevelsAndElectron();
+    drawOverlay();
+  }
+
+  function frame(now){
+    const dt = Math.min(0.05, (now - tPrev)/1000);
+    tPrev = now;
+
+    if(!paused){
+      update(dt);
+    } else {
+      // Still animate overlay a little (message fade)
+      if(state.messageTTL > 0) state.messageTTL = Math.max(0, state.messageTTL - dt*0.6);
+      // sparks drift time a bit
+      for(const s of sparks) s.t += dt*0.25;
+    }
+
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  // ===== Buttons =====
+  btnToggle.addEventListener("click", () => {
+    paused = !paused;
+    btnToggle.textContent = paused ? "Resume" : "Pause";
+    setMessage(paused ? "Paused" : "Resumed", 0.7);
+  });
+
+  btnBurst.addEventListener("click", () => photonBurst());
+
+  btnReset.addEventListener("click", () => {
+    photons.length = 0;
+    sparks.length = 0;
+    state.storedEnergy = 20;
+    state.electronLevel = 0;
+    state.electronPhase = 0;
+    setMessage("Reset", 0.7);
+  });
+
+  // Kickstart some photons
+  for(let i=0;i<30;i++) spawnPhoton(false);
+
+  setMessage("Watch photons hit the resonator → electron jumps", 1.6);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

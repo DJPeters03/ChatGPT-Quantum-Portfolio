@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Quantum Origin Simulator — Planck, UV Catastrophe, and What's Incomplete</title>
+  <style>
+    :root{ color-scheme: dark; }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0; background:#0b0f14; color:#e8eef6;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .wrap{
+      width:min(1250px, 96vw);
+      margin:14px auto;
+      display:grid;
+      gap:12px;
+      grid-template-columns: 1.25fr 0.75fr;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .wrap{ grid-template-columns: 1fr; }
+    }
+    .card{
+      background:#0f1622;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:14px;
+      padding:12px;
+      box-shadow: 0 10px 28px rgba(0,0,0,.25);
+    }
+    h1{
+      margin:0 0 6px 0;
+      font-size:18px;
+      letter-spacing:.2px;
+    }
+    .sub{
+      margin:0 0 10px 0;
+      color:rgba(232,238,246,.8);
+      font-size:13px;
+      line-height:1.35;
+    }
+    canvas{
+      width:100%;
+      height:auto;
+      border-radius:12px;
+      background: radial-gradient(1200px 600px at 30% 20%, rgba(90,140,255,.10), transparent 55%),
+                  linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01));
+      border:1px solid rgba(255,255,255,.08);
+      display:block;
+    }
+    .row{
+      display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+    }
+    .controls{
+      display:grid;
+      gap:10px;
+      grid-template-columns: 1fr 1fr;
+    }
+    .controls .wide{ grid-column:1 / -1; }
+    .ctl{
+      background:#0c1320;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:12px;
+      padding:10px;
+    }
+    .ctl label{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      font-size:12px;
+      color:rgba(232,238,246,.85);
+      margin-bottom:7px;
+    }
+    .ctl input[type="range"]{ width:100%; }
+    .pillrow{ display:flex; flex-wrap:wrap; gap:8px; }
+    .pill{
+      padding:7px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.04);
+      font-size:12px;
+      color:rgba(232,238,246,.9);
+      cursor:pointer;
+      user-select:none;
+    }
+    .pill.on{
+      background:rgba(90,140,255,.16);
+      border-color:rgba(90,140,255,.35);
+    }
+    .hr{ height:1px; background:rgba(255,255,255,.10); margin:10px 0; }
+    .mini{
+      display:grid;
+      gap:10px;
+      grid-template-columns: 1fr;
+    }
+    .kv{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:8px;
+      font-size:12px;
+      color:rgba(232,238,246,.85);
+    }
+    .kv b{ color:#e8eef6; }
+    .note{
+      font-size:12px;
+      color:rgba(232,238,246,.82);
+      line-height:1.45;
+    }
+    .emph{
+      color:#b7ccff;
+      font-weight:600;
+    }
+    .danger{
+      color:#ffb1b1;
+      font-weight:600;
+    }
+    .ok{
+      color:#b9ffcf;
+      font-weight:600;
+    }
+    button{
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.05);
+      color:#e8eef6;
+      padding:9px 10px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:600;
+      font-size:12px;
+    }
+    button:hover{ background:rgba(255,255,255,.08); }
+    .small{
+      font-size:11.5px;
+      color:rgba(232,238,246,.75);
+      line-height:1.35;
+    }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <!-- LEFT: Main plot -->
+    <div class="card">
+      <h1>Quantum Origin Simulator — Planck vs Classical “UV Catastrophe”</h1>
+      <p class="sub">
+        Classical physics predicted a furnace should radiate <span class="danger">infinite energy</span> at high frequency (the “ultraviolet catastrophe”).
+        In 1900, <span class="emph">Max Planck</span> fixed this by assuming energy is exchanged in <span class="emph">discrete packets</span>:
+        <span class="mono">E = n·h·ν</span>. This is one of the first doors into “quantum.”
+      </p>
+
+      <canvas id="plot" width="980" height="520"></canvas>
+
+      <div class="hr"></div>
+
+      <div class="controls">
+        <div class="ctl">
+          <label>
+            <span>Temperature (K)</span>
+            <span class="mono" id="tLabel">3000</span>
+          </label>
+          <input id="temp" type="range" min="800" max="12000" value="3000" step="50" />
+          <div class="small">Higher temperature shifts the peak to higher frequency (Wien shift).</div>
+        </div>
+
+        <div class="ctl">
+          <label>
+            <span>Frequency range (×10<sup>14</sup> Hz)</span>
+            <span class="mono" id="fLabel">0.0 → 12.0</span>
+          </label>
+          <input id="fmax" type="range" min="4" max="30" value="12" step="1" />
+          <div class="small">Expand the right edge to watch classical blow up.</div>
+        </div>
+
+        <div class="ctl wide">
+          <label>
+            <span>Show layers</span>
+            <span class="mono" id="layerLabel"></span>
+          </label>
+          <div class="pillrow">
+            <div class="pill on" id="pPlanck">Planck (quantized)</div>
+            <div class="pill on" id="pRJ">Rayleigh–Jeans (classical)</div>
+            <div class="pill on" id="pWien">Wien approx</div>
+            <div class="pill on" id="pMarkers">Peak + legend</div>
+          </div>
+          <div class="small">
+            The shapes are correct; values are scaled for visibility (no external libraries; fast canvas math).
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Quantization + Incomplete -->
+    <div class="card">
+      <h1>Planck’s “Quanta” Engine</h1>
+      <p class="sub">
+        Planck modeled matter as many tiny oscillators (“resonators”) exchanging energy with radiation.
+        His key move: allow only <span class="emph">stepped energies</span> instead of any continuous value.
+      </p>
+
+      <div class="mini">
+        <div class="ctl">
+          <label>
+            <span>Oscillator frequency ν (×10<sup>14</sup> Hz)</span>
+            <span class="mono" id="nuLabel">5.00</span>
+          </label>
+          <input id="nu" type="range" min="1" max="15" value="5" step="0.1" />
+          <div class="small">This “ν” sets the spacing of energy steps <span class="mono">ΔE = hν</span>.</div>
+        </div>
+
+        <div class="ctl">
+          <label>
+            <span>Energy quanta n (integer)</span>
+            <span class="mono" id="nLabel">3</span>
+          </label>
+          <input id="n" type="range" min="0" max="20" value="3" step="1" />
+          <div class="kv"><span>Energy packet rule</span><b class="mono">E = n·h·ν</b></div>
+          <div class="kv"><span>Step size</span><b class="mono" id="stepLabel">—</b></div>
+          <div class="kv"><span>Current energy</span><b class="mono" id="eLabel">—</b></div>
+          <div class="small">If energy can only change in chunks, high-frequency modes don’t “steal” infinite energy.</div>
+        </div>
+
+        <div class="ctl">
+          <div class="row">
+            <button id="emit">Emit one quantum</button>
+            <button id="absorb">Absorb one quantum</button>
+            <button id="reset">Reset n</button>
+          </div>
+          <div class="small">This is the “stepped” exchange Planck introduced (1900).</div>
+        </div>
+
+        <div class="hr"></div>
+
+        <h1>Where Quantum Is Still Incomplete</h1>
+        <p class="sub">
+          Planck’s quantization launched quantum theory — but the story isn’t “done.”
+          Here are two major places where physics still lacks a single complete explanation.
+        </p>
+
+        <div class="ctl">
+          <div class="kv"><span class="emph">1) Measurement (“collapse”) rule</span><b class="mono">postulate</b></div>
+          <p class="note">
+            Standard quantum mechanics predicts smooth evolution with Schrödinger’s equation, but when you
+            <span class="emph">measure</span>, you apply a separate rule (“collapse” / Born probabilities).
+            The theory doesn’t uniquely derive *why* a measurement yields one definite outcome.
+          </p>
+          <div class="small">Interpretations (Copenhagen, Many-Worlds, Bohmian, etc.) differ on what’s “really” happening.</div>
+        </div>
+
+        <div class="ctl">
+          <div class="kv"><span class="emph">2) Quantum gravity</span><b class="mono">missing unification</b></div>
+          <p class="note">
+            Quantum theory + General Relativity both work extremely well — but not as one consistent theory
+            in extreme regimes (e.g., the deep interior of black holes, the earliest moments of the universe).
+            A complete “quantum gravity” framework is still an open problem.
+          </p>
+          <div class="small">This is why you’ll hear “quantum is incomplete” in the *fundamental* sense.</div>
+        </div>
+
+        <div class="ctl">
+          <div class="kv"><span>Takeaway</span><b class="ok">Planck solved a real experimental mismatch</b></div>
+          <p class="note">
+            The origin story is “provable” in the sense that: classical → wrong (UV catastrophe),
+            Planck quantization → matches blackbody data shape and avoids infinity. But “complete reality underneath”
+            is still debated (measurement) and unfinished (quantum gravity).
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ---------- Constants ----------
+  // Physical constants (SI)
+  const h  = 6.62607015e-34;     // Planck constant (J·s)
+  const kB = 1.380649e-23;       // Boltzmann constant (J/K)
+  const c  = 299792458;          // speed of light (m/s)
+  const pi = Math.PI;
+
+  // ---------- UI ----------
+  const cvs = document.getElementById('plot');
+  const ctx = cvs.getContext('2d');
+
+  const tempEl = document.getElementById('temp');
+  const fmaxEl = document.getElementById('fmax');
+
+  const tLabel = document.getElementById('tLabel');
+  const fLabel = document.getElementById('fLabel');
+
+  const pPlanck = document.getElementById('pPlanck');
+  const pRJ     = document.getElementById('pRJ');
+  const pWien   = document.getElementById('pWien');
+  const pMarkers= document.getElementById('pMarkers');
+  const layerLabel = document.getElementById('layerLabel');
+
+  const nuEl = document.getElementById('nu');
+  const nEl  = document.getElementById('n');
+  const nuLabel = document.getElementById('nuLabel');
+  const nLabel  = document.getElementById('nLabel');
+  const stepLabel = document.getElementById('stepLabel');
+  const eLabel    = document.getElementById('eLabel');
+
+  const emitBtn   = document.getElementById('emit');
+  const absorbBtn = document.getElementById('absorb');
+  const resetBtn  = document.getElementById('reset');
+
+  const state = {
+    showPlanck: true,
+    showRJ: true,
+    showWien: true,
+    showMarkers: true,
+    T: +tempEl.value,
+    fMax14: +fmaxEl.value, // in units of 1e14 Hz
+    nu14: +nuEl.value,
+    n: +nEl.value
+  };
+
+  function togglePill(el, key){
+    state[key] = !state[key];
+    el.classList.toggle('on', state[key]);
+    draw();
+  }
+
+  pPlanck.onclick = () => togglePill(pPlanck, 'showPlanck');
+  pRJ.onclick     = () => togglePill(pRJ, 'showRJ');
+  pWien.onclick   = () => togglePill(pWien, 'showWien');
+  pMarkers.onclick= () => togglePill(pMarkers, 'showMarkers');
+
+  tempEl.oninput = () => {
+    state.T = +tempEl.value;
+    tLabel.textContent = String(state.T);
+    draw();
+  };
+
+  fmaxEl.oninput = () => {
+    state.fMax14 = +fmaxEl.value;
+    fLabel.innerHTML = `0.0 \u2192 ${state.fMax14.toFixed(1)}`;
+    draw();
+  };
+
+  nuEl.oninput = () => {
+    state.nu14 = +nuEl.value;
+    nuLabel.textContent = state.nu14.toFixed(2);
+    syncQuantumPanel();
+  };
+
+  nEl.oninput = () => {
+    state.n = +nEl.value;
+    nLabel.textContent = String(state.n);
+    syncQuantumPanel();
+  };
+
+  emitBtn.onclick = () => { state.n = Math.max(0, state.n - 1); nEl.value = state.n; nLabel.textContent = state.n; syncQuantumPanel(); };
+  absorbBtn.onclick = () => { state.n = Math.min(20, state.n + 1); nEl.value = state.n; nLabel.textContent = state.n; syncQuantumPanel(); };
+  resetBtn.onclick  = () => { state.n = 0; nEl.value = state.n; nLabel.textContent = state.n; syncQuantumPanel(); };
+
+  function syncQuantumPanel(){
+    const nu = state.nu14 * 1e14;
+    const dE = h * nu;         // J
+    const E  = state.n * dE;   // J
+
+    stepLabel.textContent = `${fmtJ(dE)} J`;
+    eLabel.textContent    = `${fmtJ(E)} J`;
+    draw();
+  }
+
+  function fmtJ(x){
+    if (x === 0) return "0";
+    const exp = Math.floor(Math.log10(Math.abs(x)));
+    const m = x / Math.pow(10, exp);
+    return `${m.toFixed(3)}e${exp}`;
+  }
+
+  // ---------- Physics Curves ----------
+  // Planck spectral radiance vs frequency:
+  // B(ν,T) = (2hν^3/c^2) * 1/(exp(hν/kT)-1)
+  function planckB(nu, T){
+    const x = (h*nu)/(kB*T);
+    // avoid overflow for huge x:
+    if (x > 80) return 0;
+    const denom = Math.expm1(x); // exp(x)-1, more stable for small x
+    return (2*h*Math.pow(nu,3)/(c*c)) / denom;
+  }
+
+  // Rayleigh-Jeans approximation:
+  // B_RJ(ν,T) = 2ν^2 kT / c^2
+  function rayleighJeansB(nu, T){
+    return (2*Math.pow(nu,2)*kB*T)/(c*c);
+  }
+
+  // Wien approximation (high-frequency):
+  // B_Wien(ν,T) = (2hν^3/c^2) * exp(-hν/kT)
+  function wienB(nu, T){
+    const x = (h*nu)/(kB*T);
+    if (x > 80) return 0;
+    return (2*h*Math.pow(nu,3)/(c*c)) * Math.exp(-x);
+  }
+
+  // ---------- Plot Helpers ----------
+  function clear(){
+    ctx.clearRect(0,0,cvs.width,cvs.height);
+    // subtle grid background
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    const gx = 10, gy = 8;
+    for(let i=1;i<gx;i++){
+      const x = (i/gx)*cvs.width;
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,cvs.height); ctx.stroke();
+    }
+    for(let j=1;j<gy;j++){
+      const y = (j/gy)*cvs.height;
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(cvs.width,y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawAxes(pad){
+    const W = cvs.width, H = cvs.height;
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.lineWidth = 1;
+
+    // frame
+    ctx.strokeRect(pad.l, pad.t, W - pad.l - pad.r, H - pad.t - pad.b);
+
+    // labels
+    ctx.fillStyle = "rgba(232,238,246,0.85)";
+    ctx.font = "12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.fillText("Spectral radiance (scaled)", pad.l, pad.t - 8);
+
+    // x-axis label
+    ctx.save();
+    ctx.translate(W/2, H - 10);
+    ctx.textAlign = "center";
+    ctx.fillText("Frequency ν  (×10^14 Hz)", 0, 0);
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  function drawLegend(pad, entries){
+    ctx.save();
+    const x0 = pad.l + 10;
+    let y0 = pad.t + 10;
+    ctx.font = "12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.textAlign = "left";
+
+    for (const e of entries){
+      ctx.fillStyle = "rgba(255,255,255,0.10)";
+      ctx.strokeStyle = "rgba(255,255,255,0.12)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(x0, y0, 260, 22, 10);
+      ctx.fill();
+      ctx.stroke();
+
+      // swatch line
+      ctx.strokeStyle = e.color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x0+10, y0+11);
+      ctx.lineTo(x0+38, y0+11);
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(232,238,246,0.92)";
+      ctx.fillText(e.label, x0+48, y0+15);
+
+      y0 += 28;
+    }
+    ctx.restore();
+  }
+
+  // polyline draw (no external libs)
+  function drawCurve(samples, color, pad, yMax){
+    const W = cvs.width, H = cvs.height;
+    const innerW = W - pad.l - pad.r;
+    const innerH = H - pad.t - pad.b;
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+
+    for (let i=0;i<samples.length;i++){
+      const s = samples[i];
+      const x = pad.l + s.x * innerW;
+      const y = pad.t + (1 - (s.y / yMax)) * innerH;
+      if (i===0) ctx.moveTo(x,y);
+      else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function findPeak(samples){
+    let best = {y:-Infinity, x:0};
+    for (const s of samples){
+      if (s.y > best.y) best = {x:s.x, y:s.y};
+    }
+    return best;
+  }
+
+  function drawPeakMarker(peak, color, pad, yMax){
+    const W = cvs.width, H = cvs.height;
+    const innerW = W - pad.l - pad.r;
+    const innerH = H - pad.t - pad.b;
+
+    const x = pad.l + peak.x * innerW;
+    const y = pad.t + (1 - (peak.y / yMax)) * innerH;
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 1.6;
+
+    // vertical line
+    ctx.globalAlpha = 0.75;
+    ctx.beginPath();
+    ctx.moveTo(x, pad.t);
+    ctx.lineTo(x, H - pad.b);
+    ctx.stroke();
+
+    // point
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.arc(x, y, 4.2, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawTitleBits(){
+    // Tiny status in the corner
+    ctx.save();
+    ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    ctx.fillStyle = "rgba(232,238,246,0.75)";
+    const on = [];
+    if (state.showPlanck) on.push("Planck");
+    if (state.showRJ) on.push("RJ");
+    if (state.showWien) on.push("Wien");
+    layerLabel.textContent = on.join(" | ") || "none";
+    ctx.restore();
+  }
+
+  // ---------- Main Draw ----------
+  function draw(){
+    clear();
+
+    const pad = { l:64, r:18, t:34, b:48 };
+    drawAxes(pad);
+
+    drawTitleBits();
+
+    const T = state.T;
+    const fMax = state.fMax14 * 1e14; // Hz
+    const N = 520; // sample count
+    const samplesPlanck = [];
+    const samplesRJ = [];
+    const samplesWien = [];
+
+    // We sample ν from a tiny positive number to fMax
+    for (let i=0;i<N;i++){
+      const x = i/(N-1);
+      const nu = (1e11 + x * (fMax - 1e11)); // avoid zero
+      const bp = planckB(nu, T);
+      const brj = rayleighJeansB(nu, T);
+      const bw = wienB(nu, T);
+
+      samplesPlanck.push({ x, y: bp });
+      samplesRJ.push({ x, y: brj });
+      samplesWien.push({ x, y: bw });
+    }
+
+    // Scale for visibility:
+    // Use Planck peak as baseline, but allow RJ to exceed (that's the "catastrophe").
+    const peakP = findPeak(samplesPlanck).y;
+    const peakRJ = findPeak(samplesRJ).y;
+    const peakW = findPeak(samplesWien).y;
+
+    // yMax chosen so Planck is nicely visible, but RJ can still blow up past the top.
+    // We'll clamp RJ drawing above the top via yMax while still showing its rising trend.
+    const yMax = peakP * 1.25;
+
+    // Draw curves
+    if (state.showPlanck) drawCurve(samplesPlanck, "rgba(90,140,255,0.95)", pad, yMax);
+    if (state.showWien)   drawCurve(samplesWien,   "rgba(255,215,120,0.90)", pad, yMax);
+    if (state.showRJ)     drawCurve(samplesRJ,     "rgba(255,130,130,0.90)", pad, yMax);
+
+    // Mark peaks and legend
+    if (state.showMarkers){
+      const p1 = findPeak(samplesPlanck);
+      drawPeakMarker(p1, "rgba(90,140,255,0.95)", pad, yMax);
+
+      // legend
+      const entries = [];
+      if (state.showPlanck) entries.push({ color:"rgba(90,140,255,0.95)", label:"Planck law (quantized): finite at high ν" });
+      if (state.showRJ)     entries.push({ color:"rgba(255,130,130,0.90)", label:"Rayleigh–Jeans (classical): diverges → ‘UV catastrophe’" });
+      if (state.showWien)   entries.push({ color:"rgba(255,215,120,0.90)", label:"Wien approx (works at high ν only)" });
+      drawLegend(pad, entries);
+
+      // Text callouts
+      ctx.save();
+      ctx.fillStyle = "rgba(232,238,246,0.88)";
+      ctx.font = "12.5px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+      const msg1 = "Classical prediction rises ~ ν² → would imply infinite total energy (wrong).";
+      const msg2 = "Planck: energy exchanged in quanta E = n·h·ν → fixes the curve.";
+      ctx.fillText(msg1, pad.l + 10, cvs.height - 70);
+      ctx.fillText(msg2, pad.l + 10, cvs.height - 52);
+      ctx.restore();
+    }
+
+    // Draw x ticks (0..fMax14)
+    drawXTicks(pad);
+
+    // Show a tiny “quantum steps” annotation using current ν,n
+    drawQuantStepsBadge(pad);
+  }
+
+  function drawXTicks(pad){
+    const W = cvs.width, H = cvs.height;
+    const innerW = W - pad.l - pad.r;
+
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.fillStyle = "rgba(232,238,246,0.75)";
+    ctx.font = "11.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    ctx.textAlign = "center";
+
+    const ticks = 6;
+    for (let i=0;i<=ticks;i++){
+      const x = pad.l + (i/ticks)*innerW;
+      ctx.beginPath();
+      ctx.moveTo(x, H - pad.b);
+      ctx.lineTo(x, H - pad.b + 6);
+      ctx.stroke();
+
+      const v = (i/ticks)*state.fMax14;
+      ctx.fillText(v.toFixed(1), x, H - pad.b + 20);
+    }
+    ctx.restore();
+  }
+
+  function drawQuantStepsBadge(pad){
+    const nu = state.nu14 * 1e14;
+    const dE = h*nu;
+    const E  = state.n*dE;
+
+    ctx.save();
+    const x = pad.l + 12;
+    const y = pad.t + 270;
+    const w = 290, hgt = 80;
+
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, hgt, 14);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(232,238,246,0.88)";
+    ctx.font = "12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.fillText("Planck quantization (local):", x+12, y+22);
+
+    ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    ctx.fillText(`ν = ${state.nu14.toFixed(2)}e14 Hz`, x+12, y+42);
+    ctx.fillText(`ΔE = hν = ${fmtJ(dE)} J`, x+12, y+58);
+    ctx.fillText(`E = n·ΔE = ${fmtJ(E)} J`, x+12, y+74);
+
+    ctx.restore();
+  }
+
+  // ---------- Init ----------
+  tLabel.textContent = String(state.T);
+  fLabel.innerHTML = `0.0 \u2192 ${state.fMax14.toFixed(1)}`;
+  nuLabel.textContent = state.nu14.toFixed(2);
+  nLabel.textContent = String(state.n);
+  syncQuantumPanel();
+  draw();
+
+  // Resize handling (keeps crisp)
+  function fitCanvasToCSS(){
+    const rect = cvs.getBoundingClientRect();
+    const dpr = Math.max(1, Math.min(2.25, window.devicePixelRatio || 1));
+    const targetW = Math.floor(rect.width * dpr);
+    const targetH = Math.floor((rect.width * 0.53) * dpr);
+
+    if (cvs.width !== targetW || cvs.height !== targetH){
+      cvs.width = targetW;
+      cvs.height = targetH;
+      draw();
+    }
+  }
+  window.addEventListener('resize', fitCanvasToCSS);
+  setTimeout(fitCanvasToCSS, 80);
+
+})();
+</script>
+</body>
+</html>

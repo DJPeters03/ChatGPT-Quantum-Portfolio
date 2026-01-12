@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Planck’s Quantum of Action — Energy Comes in Packets (ΔE = h·f)</title>
+  <style>
+    :root{ color-scheme: dark; }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0; background:#0b0f14; color:#e8eef6;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .wrap{ width:min(1200px, 96vw); margin:14px auto; display:grid; gap:12px; }
+    .card{
+      background:#0f1622; border:1px solid rgba(255,255,255,.10);
+      border-radius:14px; padding:12px;
+      box-shadow: 0 10px 28px rgba(0,0,0,.28);
+    }
+    h1{ margin:0 0 6px; font-size:18px; }
+    .row{ display:grid; gap:12px; grid-template-columns: 1.2fr 0.8fr; }
+    @media (max-width: 980px){ .row{ grid-template-columns:1fr; } }
+
+    canvas{ width:100%; height:auto; display:block; background:#0b0f14; border-radius:12px; border:1px solid rgba(255,255,255,.08); }
+
+    .controls{ display:grid; gap:10px; }
+    .control{
+      display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:center;
+      padding:10px; border-radius:12px; border:1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.03);
+    }
+    .control label{ font-size:13px; color:#cfe2ff; }
+    .control input[type="range"]{ width:100%; grid-column: 1 / -1; }
+    .pill{
+      font-size:12px; padding:4px 8px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.25);
+      color:#dfefff;
+      justify-self:end;
+    }
+    .btns{ display:flex; gap:8px; flex-wrap:wrap; }
+    button{
+      cursor:pointer;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color:#e8eef6;
+      padding:10px 12px;
+      font-weight:600;
+    }
+    button:hover{ background: rgba(255,255,255,.10); }
+    .note{
+      color:#b7c7de; font-size:13px; line-height:1.35;
+      border-left:3px solid rgba(120,170,255,.35);
+      padding-left:10px;
+    }
+    .mini{
+      font-size:12px; color:#b7c7de;
+    }
+    .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    @media (max-width: 700px){ .grid2{ grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Planck’s “Quantum of Action” — energy changes happen in packets</h1>
+      <div class="note">
+        The resonator oscillates at frequency <b>f</b>. Planck’s key move: it can only trade energy in chunks of size
+        <b>ΔE = h·f</b>. So energy can’t slide smoothly — it <i>snaps</i> to levels.
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="card">
+        <canvas id="cv" width="1100" height="640"></canvas>
+        <div class="mini" style="margin-top:8px;">
+          Left: “classical” energy (continuous). Right: “quantized” energy (snaps to n·h·f). Dropping levels emits little energy bars.
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="controls">
+
+          <div class="control">
+            <label>Frequency f (sets spacing ΔE = h·f)</label>
+            <div class="pill" id="fPill"></div>
+            <input id="f" type="range" min="0.4" max="3.0" step="0.01" value="1.2" />
+          </div>
+
+          <div class="control">
+            <label>Planck constant scale (visual only)</label>
+            <div class="pill" id="hPill"></div>
+            <input id="h" type="range" min="0.4" max="3.5" step="0.01" value="1.0" />
+          </div>
+
+          <div class="control">
+            <label>“Classical” energy input (continuous)</label>
+            <div class="pill" id="ePill"></div>
+            <input id="E" type="range" min="0" max="18" step="0.01" value="9.5" />
+          </div>
+
+          <div class="grid2">
+            <div class="control">
+              <label>Quantize mode</label>
+              <div class="pill" id="modePill"></div>
+              <input id="mode" type="range" min="0" max="2" step="1" value="1" />
+              <div class="mini">
+                0 = floor (always round down)<br/>
+                1 = nearest (snap to closest)<br/>
+                2 = ceil (always round up)
+              </div>
+            </div>
+
+            <div class="control">
+              <label>Time scale (Δt for action E·Δt)</label>
+              <div class="pill" id="dtPill"></div>
+              <input id="dt" type="range" min="0.4" max="2.5" step="0.01" value="1.0" />
+            </div>
+          </div>
+
+          <div class="btns">
+            <button id="pump">Pump energy (+)</button>
+            <button id="dump">Dump energy (−)</button>
+            <button id="reset">Reset</button>
+            <button id="pause">Pause</button>
+          </div>
+
+          <div class="note" id="readout"></div>
+
+          <div class="mini">
+            Tip: Increase <b>f</b> to make the “stairs” farther apart. That’s literally ΔE getting bigger because ΔE = h·f.
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+
+  const elF = document.getElementById('f');
+  const elH = document.getElementById('h');
+  const elE = document.getElementById('E');
+  const elMode = document.getElementById('mode');
+  const elDt = document.getElementById('dt');
+
+  const fPill = document.getElementById('fPill');
+  const hPill = document.getElementById('hPill');
+  const ePill = document.getElementById('ePill');
+  const modePill = document.getElementById('modePill');
+  const dtPill = document.getElementById('dtPill');
+
+  const readout = document.getElementById('readout');
+
+  const btnPump = document.getElementById('pump');
+  const btnDump = document.getElementById('dump');
+  const btnReset = document.getElementById('reset');
+  const btnPause = document.getElementById('pause');
+
+  // State
+  let running = true;
+
+  let classicalE = parseFloat(elE.value); // continuous
+  let quantizedE = 0; // will snap
+  let lastN = 0;
+
+  let phase = 0; // oscillator phase
+  let actionAccum = 0; // visual proxy for "E * Δt" accumulating
+
+  const emissions = []; // little bars emitted when dropping levels
+
+  function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+
+  function snapN(E, dE, mode){
+    if (dE <= 1e-9) return 0;
+    const x = E / dE;
+    if (mode === 0) return Math.max(0, Math.floor(x + 1e-9));
+    if (mode === 2) return Math.max(0, Math.ceil(x - 1e-9));
+    return Math.max(0, Math.round(x));
+  }
+
+  function updatePills(){
+    const f = parseFloat(elF.value);
+    const h = parseFloat(elH.value);
+    const dt = parseFloat(elDt.value);
+    const mode = parseInt(elMode.value, 10);
+
+    fPill.textContent = `f = ${f.toFixed(2)} (arb)`;
+    hPill.textContent = `h scale = ${h.toFixed(2)}`;
+    ePill.textContent = `E = ${classicalE.toFixed(2)} (arb)`;
+    dtPill.textContent = `Δt = ${dt.toFixed(2)}`;
+
+    modePill.textContent = (mode===0) ? "floor" : (mode===1) ? "nearest" : "ceil";
+  }
+
+  function reset(){
+    classicalE = 9.5;
+    elE.value = classicalE;
+    quantizedE = 0;
+    lastN = 0;
+    phase = 0;
+    actionAccum = 0;
+    emissions.length = 0;
+    running = true;
+    btnPause.textContent = "Pause";
+    updatePills();
+  }
+
+  function emitBars(count, x, y){
+    // Emit "count" bars of energy; each bar is one quantum ΔE
+    for(let i=0;i<count;i++){
+      emissions.push({
+        x: x + (Math.random()*60-30),
+        y: y + (Math.random()*30-15),
+        vy: - (2.2 + Math.random()*1.8),
+        life: 1.0,
+        w: 10 + Math.random()*10,
+        h: 3 + Math.random()*3
+      });
+    }
+  }
+
+  btnPump.addEventListener('click', () => {
+    classicalE = clamp(classicalE + 1.2, 0, 18);
+    elE.value = classicalE;
+    updatePills();
+  });
+
+  btnDump.addEventListener('click', () => {
+    classicalE = clamp(classicalE - 1.2, 0, 18);
+    elE.value = classicalE;
+    updatePills();
+  });
+
+  btnReset.addEventListener('click', reset);
+
+  btnPause.addEventListener('click', () => {
+    running = !running;
+    btnPause.textContent = running ? "Pause" : "Resume";
+  });
+
+  elE.addEventListener('input', () => { classicalE = parseFloat(elE.value); updatePills(); });
+  [elF, elH, elMode, elDt].forEach(x => x.addEventListener('input', updatePills));
+
+  function drawGauge(x,y,w,h, frac){
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,.14)";
+    ctx.fillStyle = "rgba(255,255,255,.05)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    roundRect(ctx, x,y,w,h,10);
+    ctx.fill(); ctx.stroke();
+
+    const pad=6;
+    const iw = (w-2*pad)*clamp(frac,0,1);
+    ctx.fillStyle = "rgba(120,170,255,.55)";
+    ctx.beginPath();
+    roundRect(ctx, x+pad, y+pad, iw, h-2*pad, 8);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function roundRect(ctx, x, y, w, h, r){
+    const rr = Math.min(r, w/2, h/2);
+    ctx.moveTo(x+rr, y);
+    ctx.arcTo(x+w, y, x+w, y+h, rr);
+    ctx.arcTo(x+w, y+h, x, y+h, rr);
+    ctx.arcTo(x, y+h, x, y, rr);
+    ctx.arcTo(x, y, x+w, y, rr);
+    ctx.closePath();
+  }
+
+  function drawStairs(x, y, w, h, dE, maxN, activeN){
+    // Draw quantized energy levels (stairs)
+    ctx.save();
+    ctx.translate(x,y);
+
+    ctx.strokeStyle = "rgba(255,255,255,.12)";
+    ctx.lineWidth = 1;
+
+    // border
+    ctx.beginPath();
+    roundRect(ctx, 0,0,w,h,12);
+    ctx.stroke();
+
+    // levels
+    const margin = 12;
+    const innerW = w - 2*margin;
+    const innerH = h - 2*margin;
+
+    for(let n=0;n<=maxN;n++){
+      const yy = margin + innerH - (n/maxN)*innerH;
+      ctx.beginPath();
+      ctx.moveTo(margin, yy);
+      ctx.lineTo(margin + innerW, yy);
+      ctx.stroke();
+    }
+
+    // active fill (up to activeN)
+    const frac = clamp(activeN/maxN, 0, 1);
+    ctx.fillStyle = "rgba(120,170,255,.18)";
+    ctx.beginPath();
+    roundRect(ctx, margin, margin + innerH*(1-frac), innerW, innerH*frac, 10);
+    ctx.fill();
+
+    // label
+    ctx.fillStyle = "rgba(232,238,246,.9)";
+    ctx.font = "12px ui-sans-serif, system-ui";
+    ctx.fillText(`quantized levels (n·ΔE)`, margin, 14);
+
+    ctx.restore();
+  }
+
+  function drawContinuousBar(x, y, w, h, frac){
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,.12)";
+    ctx.fillStyle = "rgba(255,255,255,.04)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    roundRect(ctx, x,y,w,h,12);
+    ctx.fill(); ctx.stroke();
+
+    const margin = 12;
+    const innerW = w - 2*margin;
+    const innerH = h - 2*margin;
+
+    const hh = innerH*clamp(frac,0,1);
+    ctx.fillStyle = "rgba(255,255,255,.10)";
+    ctx.beginPath();
+    roundRect(ctx, x+margin, y+margin + (innerH-hh), innerW, hh, 10);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(232,238,246,.9)";
+    ctx.font = "12px ui-sans-serif, system-ui";
+    ctx.fillText(`continuous energy`, x+margin, y+14);
+    ctx.restore();
+  }
+
+  function drawOscillator(cx, cy, radius, freq, energyFrac, phase, label){
+    // A ring + a moving dot; amplitude depends on energy
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // ring
+    ctx.strokeStyle = "rgba(255,255,255,.14)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0,0,radius,0,Math.PI*2);
+    ctx.stroke();
+
+    // inner glow based on energy
+    ctx.fillStyle = `rgba(120,170,255,${0.06 + 0.16*energyFrac})`;
+    ctx.beginPath();
+    ctx.arc(0,0,radius-6,0,Math.PI*2);
+    ctx.fill();
+
+    // oscillator dot
+    const amp = (radius-18) * (0.25 + 0.75*energyFrac);
+    const x = Math.cos(phase) * amp;
+    const y = Math.sin(phase) * amp;
+
+    ctx.fillStyle = "rgba(255,255,255,.85)";
+    ctx.beginPath();
+    ctx.arc(x,y,6,0,Math.PI*2);
+    ctx.fill();
+
+    // label
+    ctx.fillStyle = "rgba(232,238,246,.92)";
+    ctx.font = "12px ui-sans-serif, system-ui";
+    ctx.fillText(label, -radius, radius+18);
+
+    // freq text
+    ctx.fillStyle = "rgba(207,226,255,.9)";
+    ctx.fillText(`f=${freq.toFixed(2)}`, -radius, radius+34);
+
+    ctx.restore();
+  }
+
+  function step(dtSec){
+    const f = parseFloat(elF.value);
+    const hScale = parseFloat(elH.value);
+    const mode = parseInt(elMode.value, 10);
+    const dtScale = parseFloat(elDt.value);
+
+    // ΔE spacing (visual units)
+    const dE = 0.9 * hScale * f; // scaled to look nice
+    const maxE = 18;
+    const maxN = Math.max(1, Math.floor(maxE / Math.max(0.0001, dE)));
+
+    // Quantize classicalE -> n * dE
+    const n = snapN(classicalE, dE, mode);
+    quantizedE = n * dE;
+
+    // If we dropped levels, emit energy bars equal to Δn
+    if (n < lastN){
+      emitBars(lastN - n, cv.width*0.73, cv.height*0.38);
+    }
+    lastN = n;
+
+    // oscillator phase: same frequency for both (concept: same f, different E)
+    phase += dtSec * (2*Math.PI) * (0.35 + f); // add base so it always moves
+    // action accumulation (visual proxy): E * Δt
+    const dT = dtSec * dtScale;
+    actionAccum += quantizedE * dT;
+
+    // update emissions
+    for (let i=emissions.length-1;i>=0;i--){
+      const p = emissions[i];
+      p.y += p.vy * (dtSec*60);
+      p.life -= dtSec*0.7;
+      p.vy -= dtSec*1.2; // slow rise
+      if (p.life <= 0) emissions.splice(i,1);
+    }
+
+    // Draw
+    ctx.clearRect(0,0,cv.width,cv.height);
+
+    // Titles
+    ctx.fillStyle = "rgba(232,238,246,.95)";
+    ctx.font = "16px ui-sans-serif, system-ui";
+    ctx.fillText("Planck: energy changes in packets (ΔE = h·f)", 18, 28);
+
+    ctx.fillStyle = "rgba(183,199,222,.95)";
+    ctx.font = "12px ui-sans-serif, system-ui";
+    ctx.fillText("Left is continuous (classical). Right snaps to levels (quantized).", 18, 48);
+
+    // Panels layout
+    const pad = 18;
+    const top = 70;
+    const panelH = 470;
+    const panelW = (cv.width - pad*3) / 2;
+
+    const leftX = pad;
+    const rightX = pad*2 + panelW;
+
+    // Continuous energy bar
+    drawContinuousBar(leftX, top, panelW, panelH, classicalE / maxE);
+
+    // Quantized stairs
+    drawStairs(rightX, top, panelW, panelH, dE, maxN, n);
+
+    // Oscillators
+    const oscY = top + panelH*0.55;
+    drawOscillator(leftX + panelW*0.5, oscY, 92, f, clamp(classicalE/maxE,0,1), phase, "Classical resonator");
+    drawOscillator(rightX + panelW*0.5, oscY, 92, f, clamp(quantizedE/maxE,0,1), phase, "Quantized resonator");
+
+    // Emitted bars (from right panel)
+    for(const p of emissions){
+      ctx.save();
+      ctx.globalAlpha = clamp(p.life,0,1);
+      ctx.fillStyle = "rgba(255,255,255,.92)";
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.restore();
+    }
+
+    // Bottom readouts
+    const infoY = top + panelH + 22;
+
+    ctx.fillStyle = "rgba(207,226,255,.95)";
+    ctx.font = "12px ui-sans-serif, system-ui";
+    ctx.fillText(`ΔE = h·f (visual units): ΔE ≈ ${dE.toFixed(2)}   |   n = ${n}   |   Quantized E = n·ΔE ≈ ${quantizedE.toFixed(2)}`, pad, infoY);
+
+    // Action meter
+    const meterX = pad;
+    const meterY = infoY + 18;
+    const meterW = cv.width - pad*2;
+    const meterH = 22;
+
+    ctx.fillStyle = "rgba(183,199,222,.9)";
+    ctx.fillText(`“Action” proxy: accumulate E·Δt (visual intuition for energy×time)`, pad, meterY - 6);
+
+    // normalize action for gauge display
+    const actionFrac = (actionAccum % 240) / 240;
+    drawGauge(meterX, meterY, meterW, meterH, actionFrac);
+
+    // text explanation panel
+    const dN = (classicalE / Math.max(dE, 1e-6));
+    const dNStr = dN.toFixed(2);
+    readout.innerHTML =
+      `<b>What you’re seeing:</b><br/>
+       • You set a continuous energy <b>E</b>. Classical view: that energy can be any value (left).<br/>
+       • Quantized view: we convert E into <b>n = E/ΔE</b> and snap it to an integer. Here <b>E/ΔE ≈ ${dNStr}</b>, so we snap to <b>n=${n}</b>.<br/>
+       • Changing <b>f</b> changes <b>ΔE</b> (level spacing). Bigger f → bigger chunks.<br/>
+       • When n drops, the resonator emits <b>little bars</b>: each bar ≈ one quantum <b>ΔE</b>.`;
+  }
+
+  let lastT = performance.now();
+  function loop(t){
+    const dt = Math.min(0.05, (t-lastT)/1000);
+    lastT = t;
+    if (running) step(dt);
+    requestAnimationFrame(loop);
+  }
+
+  updatePills();
+  reset();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

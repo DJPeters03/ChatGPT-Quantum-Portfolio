@@ -1,0 +1,717 @@
+<!-- blackbody_uv_catastrophe_visualizer.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Blackbody Furnace + UV Catastrophe Visualizer</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body{
+      margin:0;
+      background:#0b0f14;
+      color:#e8eef6;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .wrap{
+      width:min(1200px, 96vw);
+      margin:16px auto;
+      display:grid;
+      gap:12px;
+    }
+    .card{
+      background:#0f1622;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:14px;
+      padding:12px;
+      box-shadow: 0 10px 28px rgba(0,0,0,.28);
+    }
+    h1{ font-size:18px; margin:0 0 8px; }
+    .sub{ opacity:.85; font-size:13px; line-height:1.35; margin:0 0 8px; }
+    .row{
+      display:grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap:12px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .row{ grid-template-columns: 1fr; }
+    }
+    canvas{
+      width:100%;
+      height:auto;
+      background: radial-gradient(1200px 600px at 50% 20%, rgba(255,255,255,.05), rgba(0,0,0,0)) , #0b0f14;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:12px;
+      display:block;
+    }
+    .controls{
+      display:grid;
+      gap:10px;
+    }
+    .control{
+      display:grid;
+      gap:6px;
+      padding:10px;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;
+      background: rgba(255,255,255,.03);
+    }
+    .control label{
+      display:flex;
+      align-items:baseline;
+      justify-content:space-between;
+      gap:10px;
+      font-size:13px;
+      opacity:.9;
+    }
+    input[type="range"]{ width:100%; }
+    .btns{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-top:2px;
+    }
+    button{
+      appearance:none;
+      border:1px solid rgba(255,255,255,.14);
+      background:#111a2a;
+      color:#e8eef6;
+      padding:8px 10px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:600;
+      font-size:13px;
+    }
+    button:hover{ filter: brightness(1.08); }
+    button:active{ transform: translateY(1px); }
+    .toggles{
+      display:grid;
+      gap:8px;
+      padding:10px;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;
+      background: rgba(255,255,255,.03);
+    }
+    .check{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      font-size:13px;
+      opacity:.9;
+    }
+    .legend{
+      display:grid;
+      gap:8px;
+      padding:10px;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;
+      background: rgba(255,255,255,.03);
+      font-size:13px;
+      line-height:1.35;
+    }
+    .chip{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.03);
+      width:fit-content;
+      font-weight:600;
+    }
+    .swatch{
+      width:12px; height:12px;
+      border-radius:3px;
+      border:1px solid rgba(255,255,255,.15);
+    }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .note{
+      opacity:.85;
+      font-size:12.5px;
+      line-height:1.45;
+      margin:0;
+    }
+    .grid2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    @media (max-width: 480px){
+      .grid2{ grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Blackbody Furnace + UV Catastrophe Visualizer</h1>
+      <p class="sub">
+        Drag temperature. The <b>classical Rayleigh–Jeans</b> prediction rises without bound as wavelength → 0 (the “UV catastrophe”),
+        while the <b>Planck</b> curve matches the measured spectrum and stays finite.
+      </p>
+    </div>
+
+    <div class="row">
+      <div class="card">
+        <canvas id="plot" width="1100" height="620"></canvas>
+      </div>
+
+      <div class="card controls">
+        <div class="control">
+          <label>
+            <span>Temperature <span class="mono">T</span> (Kelvin)</span>
+            <span class="mono" id="tRead">5800 K</span>
+          </label>
+          <input id="tSlider" type="range" min="300" max="12000" step="10" value="5800" />
+          <div class="btns">
+            <button data-t="300">Candle (300K)</button>
+            <button data-t="1200">Toaster (1200K)</button>
+            <button data-t="3000">Tungsten (3000K)</button>
+            <button data-t="5800">Sun (5800K)</button>
+            <button data-t="10000">Blue star (10000K)</button>
+          </div>
+        </div>
+
+        <div class="toggles">
+          <div class="check">
+            <input id="showPlanck" type="checkbox" checked />
+            <label for="showPlanck">Show “measured” curve (Planck)</label>
+          </div>
+          <div class="check">
+            <input id="showRJ" type="checkbox" checked />
+            <label for="showRJ">Show classical curve (Rayleigh–Jeans)</label>
+          </div>
+          <div class="check">
+            <input id="showRef" type="checkbox" checked />
+            <label for="showRef">Show hardcoded “reference measurement” points</label>
+          </div>
+          <div class="check">
+            <input id="logY" type="checkbox" checked />
+            <label for="logY">Log scale (helps see both curves)</label>
+          </div>
+          <div class="check">
+            <input id="showVisibleBand" type="checkbox" checked />
+            <label for="showVisibleBand">Highlight visible band (≈ 380–740 nm)</label>
+          </div>
+        </div>
+
+        <div class="legend">
+          <div class="chip"><span class="swatch" style="background:#8be9fd;"></span> Planck (quantum / measured)</div>
+          <div class="chip"><span class="swatch" style="background:#ff5555;"></span> Rayleigh–Jeans (classical)</div>
+          <div class="chip"><span class="swatch" style="background:#f1fa8c;"></span> Reference points (hardcoded)</div>
+          <p class="note">
+            X-axis: wavelength (nm). Y-axis: relative spectral intensity (normalized).<br/>
+            The “blow up” is the classical curve diverging at short wavelengths.
+          </p>
+        </div>
+
+        <div class="legend">
+          <div class="grid2">
+            <div>
+              <div class="mono" style="opacity:.9; font-weight:700;">What you’re seeing</div>
+              <p class="note">
+                Classical physics predicts <span class="mono">B(λ) ∝ T / λ⁴</span> (RJ), which shoots upward in the ultraviolet.
+                Planck’s formula adds quantization and yields a peak + decay.
+              </p>
+            </div>
+            <div>
+              <div class="mono" style="opacity:.9; font-weight:700;">Quick intuition</div>
+              <p class="note">
+                Shorter wavelength = higher frequency = more energy per mode.
+                Classical theory gives infinite energy as λ → 0; quantization fixes it.
+              </p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // --- Physical constants (SI) ---
+  const h  = 6.62607015e-34;   // Planck constant (J*s)
+  const c  = 299792458;        // speed of light (m/s)
+  const kB = 1.380649e-23;     // Boltzmann constant (J/K)
+
+  // --- Plot domain ---
+  // We'll visualize 100 nm to 3000 nm to include UV, visible, IR.
+  const L_MIN_NM = 100;
+  const L_MAX_NM = 3000;
+
+  // Canvas + UI
+  const canvas = document.getElementById("plot");
+  const ctx = canvas.getContext("2d");
+
+  const tSlider = document.getElementById("tSlider");
+  const tRead   = document.getElementById("tRead");
+
+  const showPlanck = document.getElementById("showPlanck");
+  const showRJ = document.getElementById("showRJ");
+  const showRef = document.getElementById("showRef");
+  const logY = document.getElementById("logY");
+  const showVisibleBand = document.getElementById("showVisibleBand");
+
+  // Preset buttons
+  document.querySelectorAll("button[data-t]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      tSlider.value = btn.getAttribute("data-t");
+      update();
+    });
+  });
+
+  // --- Blackbody formulas ---
+  // Planck spectral radiance B_lambda(λ, T):
+  // B(λ) = (2hc^2 / λ^5) * 1/(exp(hc/(λkT)) - 1)
+  function planckB(lambda_m, T){
+    const a = (2*h*c*c) / Math.pow(lambda_m, 5);
+    const x = (h*c) / (lambda_m*kB*T);
+    // avoid overflow in exp for very large x
+    if (x > 700) return 0; // exp(700) ~ 1e304; beyond this it's effectively 0 contribution
+    const denom = Math.exp(x) - 1;
+    return a / denom;
+  }
+
+  // Rayleigh-Jeans approximation:
+  // B_RJ(λ) = 2ckT / λ^4
+  function rayleighJeansB(lambda_m, T){
+    return (2*c*kB*T) / Math.pow(lambda_m, 4);
+  }
+
+  // --- Hardcoded “reference measurement” points ---
+  // We'll generate a fixed set of points in wavelength, and the "measured" intensity
+  // will be Planck(T) with a tiny deterministic wobble to feel "experimental".
+  // These points are "hardcoded" in wavelength and the noise function is deterministic.
+  const refWavelengthsNm = [
+    120, 140, 160, 180, 200, 230, 260, 300, 340, 380, 420, 460,
+    500, 540, 580, 620, 660, 700, 740, 820, 900, 1100, 1400, 1800, 2400, 3000
+  ];
+
+  function wobble(i){
+    // deterministic pseudo-noise in [-0.06, +0.06]
+    const s = Math.sin(i*12.9898) * 43758.5453;
+    const frac = s - Math.floor(s);
+    return (frac - 0.5) * 0.12;
+  }
+
+  // --- Rendering helpers ---
+  function clear(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+
+  function roundRect(x,y,w,h,r){
+    const rr = Math.min(r, w/2, h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+rr, y);
+    ctx.arcTo(x+w, y, x+w, y+h, rr);
+    ctx.arcTo(x+w, y+h, x, y+h, rr);
+    ctx.arcTo(x, y+h, x, y, rr);
+    ctx.arcTo(x, y, x+w, y, rr);
+    ctx.closePath();
+  }
+
+  function drawAxes(plot){
+    const {x0,y0,w,h} = plot;
+
+    // Axes
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.lineWidth = 1;
+
+    // Border
+    roundRect(x0, y0, w, h, 12);
+    ctx.stroke();
+
+    // Grid
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.setLineDash([6,6]);
+
+    // vertical grid lines (wavelength)
+    const vTicks = [100, 200, 300, 400, 500, 700, 1000, 1500, 2000, 3000];
+    for (const nm of vTicks){
+      if (nm < L_MIN_NM || nm > L_MAX_NM) continue;
+      const x = mapX(nm, plot);
+      ctx.beginPath();
+      ctx.moveTo(x, y0);
+      ctx.lineTo(x, y0+h);
+      ctx.stroke();
+    }
+
+    // horizontal grid lines (y)
+    const yTicks = logY.checked
+      ? [1e-4, 1e-3, 1e-2, 1e-1, 1, 10]
+      : [0, 0.2, 0.4, 0.6, 0.8, 1.0];
+    for (const yt of yTicks){
+      const y = mapY(yt, plot);
+      ctx.beginPath();
+      ctx.moveTo(x0, y);
+      ctx.lineTo(x0+w, y);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+    // Labels
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.font = "12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.textAlign = "left";
+    ctx.fillText("Wavelength (nm)", x0 + 10, y0 + h - 10);
+
+    ctx.save();
+    ctx.translate(x0 + 12, y0 + 16);
+    ctx.rotate(-Math.PI/2);
+    ctx.textAlign = "left";
+    ctx.fillText(logY.checked ? "Relative intensity (log scale)" : "Relative intensity (linear)", 0, 0);
+    ctx.restore();
+
+    // Tick labels (x)
+    ctx.fillStyle = "rgba(255,255,255,0.75)";
+    ctx.textAlign = "center";
+    for (const nm of [100,200,300,400,500,700,1000,1500,2000,3000]){
+      if (nm < L_MIN_NM || nm > L_MAX_NM) continue;
+      const x = mapX(nm, plot);
+      ctx.fillText(String(nm), x, y0 + h + 18);
+    }
+
+    // Title in-plot
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(255,255,255,0.88)";
+    ctx.font = "700 13px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.fillText("Classical vs Quantum Blackbody Spectrum", x0 + 12, y0 + 20);
+
+    ctx.restore();
+  }
+
+  function mapX(nm, plot){
+    const {x0,w} = plot;
+    const t = (nm - L_MIN_NM) / (L_MAX_NM - L_MIN_NM);
+    return x0 + t*w;
+  }
+
+  function mapY(yVal, plot){
+    const {y0,h} = plot;
+
+    // If log: map yVal in [yMinLog, yMaxLog] using log10,
+    // else linear map [0, yMaxLin].
+    if (logY.checked){
+      const yMin = 1e-4;   // floor to show near-zero
+      const yMax = 10;     // allow classical overshoot to be visible
+      const clamp = (v) => Math.max(yMin, Math.min(yMax, v));
+      const lv = Math.log10(clamp(yVal));
+      const lmin = Math.log10(yMin);
+      const lmax = Math.log10(yMax);
+      const t = (lv - lmin) / (lmax - lmin);
+      return y0 + (1 - t)*h;
+    } else {
+      const yMin = 0;
+      const yMax = 1.05;   // normalized around 1
+      const clamp = (v) => Math.max(yMin, Math.min(yMax, v));
+      const t = (clamp(yVal) - yMin) / (yMax - yMin);
+      return y0 + (1 - t)*h;
+    }
+  }
+
+  function drawVisibleBand(plot){
+    if (!showVisibleBand.checked) return;
+    const {x0,y0,w,h} = plot;
+
+    const left = mapX(380, plot);
+    const right = mapX(740, plot);
+
+    ctx.save();
+    ctx.fillStyle = "rgba(80, 250, 123, 0.08)";
+    ctx.strokeStyle = "rgba(80, 250, 123, 0.22)";
+    ctx.lineWidth = 1;
+
+    ctx.beginPath();
+    ctx.rect(left, y0, right-left, h);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(80, 250, 123, 0.75)";
+    ctx.font = "12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("visible", (left+right)/2, y0 + 14);
+
+    ctx.restore();
+  }
+
+  function computeCurves(T){
+    const N = 1100; // samples
+    const xsNm = new Array(N);
+    const planck = new Array(N);
+    const rj = new Array(N);
+
+    // Use nm->m conversion
+    for (let i=0;i<N;i++){
+      const nm = L_MIN_NM + (i/(N-1))*(L_MAX_NM - L_MIN_NM);
+      const m = nm * 1e-9;
+      xsNm[i] = nm;
+      planck[i] = planckB(m, T);
+      rj[i] = rayleighJeansB(m, T);
+    }
+
+    // Normalize to Planck peak = 1
+    const pMax = planck.reduce((a,b)=>Math.max(a,b), 0) || 1;
+    for (let i=0;i<N;i++){
+      planck[i] /= pMax;
+      rj[i] /= pMax;
+    }
+
+    return { xsNm, planck, rj };
+  }
+
+  function drawCurve(plot, xsNm, ys, strokeStyle, lineWidth, dash){
+    ctx.save();
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth = lineWidth;
+    ctx.setLineDash(dash || []);
+    ctx.beginPath();
+
+    let started = false;
+    for (let i=0;i<xsNm.length;i++){
+      const x = mapX(xsNm[i], plot);
+      const y = mapY(ys[i], plot);
+
+      // Skip NaNs
+      if (!Number.isFinite(y)) continue;
+
+      if (!started){
+        ctx.moveTo(x,y);
+        started = true;
+      } else {
+        ctx.lineTo(x,y);
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawReferencePoints(plot, T){
+    if (!showRef.checked) return;
+
+    // Build points around Planck(T) with a deterministic wobble
+    const points = [];
+    for (let i=0;i<refWavelengthsNm.length;i++){
+      const nm = refWavelengthsNm[i];
+      const m  = nm * 1e-9;
+      points.push({ nm, val: planckB(m, T), i });
+    }
+    // Normalize by Planck peak at this T, same as curve normalization
+    const peak = points.reduce((a,p)=>Math.max(a,p.val), 0) || 1;
+    for (const p of points){
+      const noisy = p.val/peak * (1 + wobble(p.i));
+      p.y = Math.max(1e-6, noisy); // keep >0 for log
+      p.x = p.nm;
+    }
+
+    ctx.save();
+    ctx.fillStyle = "rgba(241, 250, 140, 0.95)";
+    ctx.strokeStyle = "rgba(241, 250, 140, 0.35)";
+    ctx.lineWidth = 1;
+
+    for (const p of points){
+      const x = mapX(p.x, plot);
+      const y = mapY(p.y, plot);
+      ctx.beginPath();
+      ctx.arc(x, y, 3.5, 0, Math.PI*2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  function drawUVWarning(plot, xsNm, rj){
+    if (!showRJ.checked) return;
+
+    // Find where RJ exceeds 10x peak (in normalized units, peak=1)
+    // and annotate near the left (UV) side.
+    let idx = -1;
+    for (let i=0;i<xsNm.length;i++){
+      if (rj[i] > 10){
+        idx = i;
+        break;
+      }
+    }
+    if (idx === -1) return;
+
+    const nm = xsNm[idx];
+    const x = mapX(nm, plot);
+    const y = mapY(Math.min(rj[idx], 10), plot);
+
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,85,85,0.55)";
+    ctx.fillStyle = "rgba(255,85,85,0.9)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5,6]);
+
+    ctx.beginPath();
+    ctx.moveTo(x, plot.y0);
+    ctx.lineTo(x, plot.y0 + plot.h);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+    const label = `RJ “blows up” as λ → 0 (UV)`;
+    ctx.font = "700 12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.textAlign = "left";
+
+    const bx = Math.min(plot.x0 + plot.w - 260, x + 10);
+    const by = plot.y0 + 42;
+
+    ctx.fillStyle = "rgba(15, 22, 34, 0.85)";
+    ctx.strokeStyle = "rgba(255,85,85,0.35)";
+    roundRect(bx, by, 250, 44, 10);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(255,85,85,0.92)";
+    ctx.fillText(label, bx + 10, by + 18);
+    ctx.fillStyle = "rgba(232, 238, 246, 0.78)";
+    ctx.font = "12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.fillText(`at about ${Math.round(nm)} nm and shorter`, bx + 10, by + 35);
+
+    ctx.restore();
+  }
+
+  function drawPeakMarker(plot, xsNm, planck){
+    if (!showPlanck.checked) return;
+
+    // find peak of planck (should be ~1 after normalization, but find index)
+    let imax = 0;
+    for (let i=1;i<planck.length;i++){
+      if (planck[i] > planck[imax]) imax = i;
+    }
+    const nmPeak = xsNm[imax];
+
+    const x = mapX(nmPeak, plot);
+    const y = mapY(planck[imax], plot);
+
+    ctx.save();
+    ctx.strokeStyle = "rgba(139,233,253,0.55)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4,6]);
+    ctx.beginPath();
+    ctx.moveTo(x, plot.y0);
+    ctx.lineTo(x, plot.y0 + plot.h);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // label
+    ctx.fillStyle = "rgba(15, 22, 34, 0.85)";
+    ctx.strokeStyle = "rgba(139,233,253,0.35)";
+    const bx = Math.min(plot.x0 + plot.w - 260, x + 10);
+    const by = plot.y0 + 92;
+    roundRect(bx, by, 250, 44, 10);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(139,233,253,0.92)";
+    ctx.font = "700 12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.textAlign = "left";
+    ctx.fillText("Planck peak (most intense λ)", bx + 10, by + 18);
+
+    ctx.fillStyle = "rgba(232, 238, 246, 0.78)";
+    ctx.font = "12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.fillText(`≈ ${Math.round(nmPeak)} nm at this temperature`, bx + 10, by + 35);
+
+    // dot at peak
+    ctx.fillStyle = "rgba(139,233,253,0.95)";
+    ctx.beginPath();
+    ctx.arc(x, y, 3.5, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawHeaderInfo(plot, T){
+    const {x0,y0} = plot;
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.font = "12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.textAlign = "left";
+    ctx.fillText(`T = ${T.toFixed(0)} K`, x0 + 12, y0 + 40);
+
+    // Also show Wien's displacement (approx) for intuition:
+    // lambda_max (m) ≈ b/T where b = 2.897771955e-3 m*K
+    const b = 2.897771955e-3;
+    const lambdaMaxNm = (b / T) * 1e9;
+
+    ctx.fillStyle = "rgba(255,255,255,0.72)";
+    ctx.fillText(`Wien peak estimate: λ_max ≈ ${Math.round(lambdaMaxNm)} nm`, x0 + 12, y0 + 58);
+    ctx.restore();
+  }
+
+  function draw(){
+    const T = Number(tSlider.value);
+    tRead.textContent = `${T} K`;
+
+    // Plot area margins
+    const plot = {
+      x0: 70,
+      y0: 22,
+      w: canvas.width - 95,
+      h: canvas.height - 90
+    };
+
+    clear();
+
+    // Visible band background
+    drawVisibleBand(plot);
+
+    // Axes + grid
+    drawAxes(plot);
+
+    const { xsNm, planck, rj } = computeCurves(T);
+
+    // Curves
+    if (showPlanck.checked){
+      drawCurve(plot, xsNm, planck, "rgba(139,233,253,0.95)", 2.5, []);
+    }
+    if (showRJ.checked){
+      // Slight dashed line so it's visually "different"
+      drawCurve(plot, xsNm, rj, "rgba(255,85,85,0.90)", 2.2, [8,7]);
+    }
+
+    // Hardcoded “reference” points
+    drawReferencePoints(plot, T);
+
+    // Annotations
+    drawUVWarning(plot, xsNm, rj);
+    drawPeakMarker(plot, xsNm, planck);
+    drawHeaderInfo(plot, T);
+
+    // Small footer note in plot
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.font = "11px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.textAlign = "right";
+    ctx.fillText("Normalized to Planck peak = 1", plot.x0 + plot.w, plot.y0 + plot.h + 34);
+    ctx.restore();
+  }
+
+  function update(){ draw(); }
+
+  // Events
+  [tSlider, showPlanck, showRJ, showRef, logY, showVisibleBand].forEach(el => {
+    el.addEventListener("input", update);
+    el.addEventListener("change", update);
+  });
+
+  // Initial render
+  update();
+
+  // Keep crisp on resize (optional, minimal)
+  function fitCanvas(){
+    // Render at fixed resolution for consistency; scale via CSS handled automatically.
+    // If you want true responsive resolution, uncomment and scale with devicePixelRatio.
+  }
+})();
+</script>
+</body>
+</html>

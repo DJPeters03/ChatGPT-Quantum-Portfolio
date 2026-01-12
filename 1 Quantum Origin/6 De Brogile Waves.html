@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Origin of Quantum 06 — De Broglie Standing Waves</title>
+  <style>
+    :root{ color-scheme: dark; }
+    body{
+      margin:0; background:#0b0f14; color:#e8eef6;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      display:flex; justify-content:center; padding:14px;
+    }
+    .wrap{ width:min(1100px, 96vw); display:grid; gap:12px; grid-template-columns: 1fr 320px; }
+    @media (max-width: 850px){ .wrap{ grid-template-columns: 1fr; } }
+    .card{
+      background:#0f1622; border:1px solid rgba(255,255,255,.10);
+      border-radius:14px; padding:16px;
+      box-shadow: 0 10px 28px rgba(0,0,0,.28);
+    }
+    h1{ margin:0 0 8px; font-size:18px; color: #7ee787; }
+    .controls{ display:flex; flex-direction:column; gap:14px; }
+    canvas{ background: #070a0f; border-radius: 8px; width: 100%; height: auto; aspect-ratio: 1/1; }
+    .label-row{ display:flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    input[type=range]{ width: 100%; cursor: pointer; }
+    .math{ font-family: "Times New Roman", serif; font-style: italic; font-size: 1.1em; color: #ffd166; }
+    .status{ font-size: 13px; line-height: 1.5; opacity: 0.9; }
+    .highlight{ color: #6ea8fe; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="card">
+    <h1>6. De Broglie: Matter as Waves</h1>
+    <canvas id="cv"></canvas>
+  </div>
+
+  <div class="card controls">
+    <div>
+      <div class="label-row">
+        <span>Quantum Number (n)</span>
+        <span id="nVal">3</span>
+      </div>
+      <input type="range" id="nSlider" min="1" max="10" step="1" value="3">
+    </div>
+
+    <div>
+      <div class="label-row">
+        <span>Wave Amplitude</span>
+      </div>
+      <input type="range" id="ampSlider" min="5" max="40" value="20">
+    </div>
+
+    <div class="status">
+      <p><b>The Physical Bridge:</b> Bohr said orbits are quantized, but Louis de Broglie explained <i>why</i>.</p>
+      <p>If the electron is a wave, its path must be a <span class="highlight">standing wave</span>. If the ends don't meet perfectly, the wave cancels itself out.</p>
+      <p class="math">Condition: nλ = 2πr</p>
+      <p>This "integer requirement" is the source of all quantum numbers found in Folder 2.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  const canvas = document.getElementById('cv');
+  const ctx = canvas.getContext('2d');
+  const nSlider = document.getElementById('nSlider');
+  const nVal = document.getElementById('nVal');
+  const ampSlider = document.getElementById('ampSlider');
+
+  let time = 0;
+
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const size = canvas.clientWidth;
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    ctx.scale(dpr, dpr);
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+
+  function draw() {
+    const w = canvas.width / (window.devicePixelRatio || 1);
+    const h = canvas.height / (window.devicePixelRatio || 1);
+    const cx = w / 2;
+    const cy = h / 2;
+    const radius = w * 0.3;
+    const n = parseInt(nSlider.value);
+    const amp = parseInt(ampSlider.value);
+    
+    nVal.textContent = n;
+    ctx.clearRect(0, 0, w, h);
+
+    // Draw Nucleus
+    ctx.fillStyle = '#ff7b72';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Draw Reference Circle (Classical Orbit)
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw De Broglie Wave
+    ctx.beginPath();
+    ctx.strokeStyle = '#6ea8fe';
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#6ea8fe';
+
+    for (let i = 0; i <= 360; i++) {
+      const angle = (i * Math.PI) / 180;
+      // The "n" determines how many wavelengths fit in the circle
+      const wave = Math.sin(angle * n + time) * amp;
+      const r = radius + wave;
+      const x = cx + Math.cos(angle) * r;
+      const y = cy + Math.sin(angle) * r;
+
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    time -= 0.05;
+    requestAnimationFrame(draw);
+  }
+
+  draw();
+</script>
+</body>
+</html>

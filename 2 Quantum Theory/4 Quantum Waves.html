@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Origin of Quantum 03 — Action → Frequencies → Radiation (Transition)</title>
+  <style>
+    :root{ color-scheme: dark; }
+    *{ box-sizing: border-box; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background:#0b0f14; color:#e8eef6;
+    }
+    .wrap{
+      width:min(1200px, 96vw);
+      margin:14px auto;
+      display:grid;
+      gap:12px;
+    }
+    .row{
+      display:grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap:12px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .row{ grid-template-columns: 1fr; }
+    }
+    .card{
+      background:#0f1622;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:14px;
+      padding:12px;
+      box-shadow: 0 10px 28px rgba(0,0,0,.28);
+    }
+    h1{
+      margin:0 0 6px;
+      font-size:18px;
+      letter-spacing:.2px;
+    }
+    p{ margin:6px 0 0; color:#bcd0ea; line-height:1.35; font-size:13px; }
+    canvas{
+      width:100%;
+      height:auto;
+      display:block;
+      background: radial-gradient(1200px 600px at 65% 30%, rgba(88,140,255,.10), transparent 60%),
+                  radial-gradient(900px 500px at 25% 70%, rgba(255,160,90,.07), transparent 60%),
+                  #0b0f14;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.08);
+    }
+    .controls{
+      display:grid;
+      gap:10px;
+    }
+    .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    @media (max-width: 980px){ .grid2{ grid-template-columns: 1fr; } }
+    label{
+      display:grid;
+      gap:6px;
+      font-size:12px;
+      color:#cfe2ff;
+    }
+    input[type="range"]{ width:100%; }
+    .mini{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    button{
+      background:#15233a;
+      color:#e8eef6;
+      border:1px solid rgba(255,255,255,.14);
+      border-radius:10px;
+      padding:8px 10px;
+      cursor:pointer;
+      font-weight:600;
+      font-size:12px;
+    }
+    button:active{ transform: translateY(1px); }
+    .pill{
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      font-size:12px;
+      color:#e8eef6;
+      background: rgba(255,255,255,.06);
+    }
+    .kv{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:8px;
+      font-size:12px;
+      color:#bcd0ea;
+      padding:8px 10px;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:12px;
+      background: rgba(0,0,0,.18);
+    }
+    .hint{ color:#9fb6d6; font-size:12px; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Origin of Quantum 03 — Action → Frequencies → Radiation (Transition)</h1>
+      <p>
+        This animation models a <b>periodic motion</b> as a sum of harmonics (Fourier components).
+        When you press <b>Transition</b>, the system jumps from one “state” to another, and a single
+        <b>radiation line</b> appears at the <b>difference frequency</b> (Δν) between states.
+      </p>
+    </div>
+
+    <div class="row">
+      <div class="card">
+        <canvas id="c" width="1100" height="640"></canvas>
+      </div>
+
+      <div class="card controls">
+        <div class="mini">
+          <button id="btnTransition">Transition (emit Δν)</button>
+          <button id="btnPause">Pause</button>
+          <span class="pill" id="modePill">RUNNING</span>
+        </div>
+
+        <div class="grid2">
+          <label>
+            Base frequency ν (how fast the orbit repeats)
+            <input id="nu" type="range" min="0.25" max="3.5" step="0.01" value="1.35" />
+          </label>
+          <label>
+            Damping (how quickly high harmonics fade)
+            <input id="damp" type="range" min="0.2" max="1.8" step="0.01" value="0.9" />
+          </label>
+        </div>
+
+        <div class="grid2">
+          <label>
+            State A “action” J₁ (scales energy + harmonic content)
+            <input id="J1" type="range" min="0.4" max="3.5" step="0.01" value="1.20" />
+          </label>
+          <label>
+            State B “action” J₂ (press Transition to jump)
+            <input id="J2" type="range" min="0.4" max="3.5" step="0.01" value="2.10" />
+          </label>
+        </div>
+
+        <div class="grid2">
+          <label>
+            Harmonics count (how many Fourier terms)
+            <input id="harm" type="range" min="1" max="14" step="1" value="8" />
+          </label>
+          <label>
+            “Selection rule” (only even/odd lines)
+            <input id="sel" type="range" min="0" max="2" step="1" value="0" />
+          </label>
+        </div>
+
+        <div class="kv"><div>Current state</div><div id="stateLabel">A</div></div>
+        <div class="kv"><div>Energy proxy E(J) = k·J²</div><div id="energyLabel">—</div></div>
+        <div class="kv"><div>Mean frequency ν̄ ≈ ∂E/∂J / const</div><div id="meanLabel">—</div></div>
+        <div class="kv"><div>Emitted line Δν (during transition)</div><div id="dnuLabel">—</div></div>
+
+        <div class="hint">
+          Tip: Increase harmonics to see a “richer” motion. Then press <b>Transition</b> and watch a
+          single Δν line pop out — a toy version of why spectra look discrete.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ======== Canvas setup ========
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+
+    // ======== UI ========
+    const ui = {
+      nu: document.getElementById('nu'),
+      damp: document.getElementById('damp'),
+      J1: document.getElementById('J1'),
+      J2: document.getElementById('J2'),
+      harm: document.getElementById('harm'),
+      sel: document.getElementById('sel'),
+      btnTransition: document.getElementById('btnTransition'),
+      btnPause: document.getElementById('btnPause'),
+      modePill: document.getElementById('modePill'),
+      stateLabel: document.getElementById('stateLabel'),
+      energyLabel: document.getElementById('energyLabel'),
+      meanLabel: document.getElementById('meanLabel'),
+      dnuLabel: document.getElementById('dnuLabel')
+    };
+
+    // Selection rule: 0=all, 1=odd only, 2=even only
+    const selectionText = (v)=> (v==0 ? "all" : (v==1 ? "odd only" : "even only"));
+
+    // ======== Model ========
+    // We'll use a simple "energy proxy" E(J)=k*J^2 so that ∂E/∂J = 2kJ.
+    // This is NOT the exact physical formula for any one system; it's a clean visual bridge.
+    const kEnergy = 1.0;
+
+    let running = true;
+    let t = 0;
+    let last = performance.now();
+
+    // Current state toggles between A and B
+    let state = 'A'; // 'A' or 'B'
+    let transitionPulse = 0; // 0..1
+    let emittedLine = null;  // {dnu, life}
+
+    // history for drawing waveform
+    const history = [];
+    const historyMax = 260;
+
+    function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+    function lerp(a,b,u){ return a + (b-a)*u; }
+
+    function getParams(){
+      const nu = parseFloat(ui.nu.value);
+      const damp = parseFloat(ui.damp.value);
+      const N = parseInt(ui.harm.value,10);
+      const sel = parseInt(ui.sel.value,10);
+      const J1 = parseFloat(ui.J1.value);
+      const J2 = parseFloat(ui.J2.value);
+      return {nu, damp, N, sel, J1, J2};
+    }
+
+    function energyFromJ(J){ return kEnergy * J * J; }
+    function dEdJ(J){ return 2 * kEnergy * J; }
+
+    // "Mean frequency" proxy: proportional to ∂E/∂J (scaled to look nice)
+    function meanFreqFromJ(J){
+      // scale factor to keep it in view; you can think of it as choosing units
+      return 0.35 * dEdJ(J);
+    }
+
+    function harmonicAllowed(n, sel){
+      if(sel === 0) return true;
+      if(sel === 1) return (n % 2 === 1);
+      if(sel === 2) return (n % 2 === 0);
+      return true;
+    }
+
+    // Build a periodic motion as sum of harmonics with exponential damping.
+    // We'll use it to generate a "wobbly orbit" radius.
+    function fourierMotion(time, baseNu, J, N, damp, sel){
+      // Base phase
+      const w = 2*Math.PI*baseNu;
+      let sum = 0;
+      let norm = 0;
+      for(let n=1; n<=N; n++){
+        if(!harmonicAllowed(n, sel)) continue;
+        const amp = Math.exp(-damp*(n-1)) * (0.55 + 0.45*Math.sin(0.9*J + n*0.7));
+        const ph  = 0.9*n + 0.35*J;
+        sum += amp * Math.cos(n*w*time + ph);
+        norm += amp;
+      }
+      if(norm <= 1e-9) norm = 1;
+      return sum / norm; // roughly -1..1
+    }
+
+    function draw(){
+      const now = performance.now();
+      const dt = Math.min(0.05, (now - last)/1000);
+      last = now;
+      if(running) t += dt;
+
+      const {nu, damp, N, sel, J1, J2} = getParams();
+      const J = (state === 'A') ? J1 : J2;
+
+      // transition pulse decay
+      transitionPulse = Math.max(0, transitionPulse - dt*0.9);
+
+      // emitted line decay
+      if(emittedLine){
+        emittedLine.life = Math.max(0, emittedLine.life - dt*0.65);
+        if(emittedLine.life <= 0) emittedLine = null;
+      }
+
+      // Update labels
+      const E = energyFromJ(J);
+      const mean = meanFreqFromJ(J);
+      ui.stateLabel.textContent = `${state}  (selection: ${selectionText(sel)})`;
+      ui.energyLabel.textContent = `${E.toFixed(3)}`;
+      ui.meanLabel.textContent = `${mean.toFixed(3)}`;
+      ui.dnuLabel.textContent = emittedLine ? `${emittedLine.dnu.toFixed(3)}` : "—";
+
+      // Layout
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0,0,W,H);
+
+      // Panels
+      const pad = 16;
+      const topH = 360;
+      const leftW = 650;
+
+      // Top-left: orbit scene
+      const scene = {x: pad, y: pad, w: leftW - pad, h: topH - pad};
+      // Top-right: spectrum
+      const spec  = {x: leftW + 8, y: pad, w: W - (leftW + 8) - pad, h: topH - pad};
+      // Bottom: waveform/history
+      const wave  = {x: pad, y: topH + 8, w: W - 2*pad, h: H - (topH + 8) - pad};
+
+      // Draw panel frames
+      panel(scene, "Periodic motion (Fourier orbit)");
+      panel(spec,  "Spectrum lines (allowed harmonics)");
+      panel(wave,  "Waveform over time (your motion → frequencies)");
+
+      // ===== Scene: orbit =====
+      const cx = scene.x + scene.w*0.52;
+      const cy = scene.y + scene.h*0.56;
+      const baseR = Math.min(scene.w, scene.h)*0.22;
+
+      // orbit wobble radius from Fourier motion
+      const m = fourierMotion(t, nu, J, N, damp, sel);
+      const wobble = 1 + 0.28*m;
+
+      // angle and position
+      const ang = 2*Math.PI*nu*t + 0.8*m;
+      const R = baseR * wobble;
+      const px = cx + Math.cos(ang)*R;
+      const py = cy + Math.sin(ang)*R*0.72;
+
+      // orbit path preview
+      ctx.save();
+      ctx.globalAlpha = 0.7;
+      ctx.strokeStyle = "rgba(180,220,255,0.22)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for(let i=0;i<220;i++){
+        const tt = t - (220-i)*0.006;
+        const mm = fourierMotion(tt, nu, J, N, damp, sel);
+        const a  = 2*Math.PI*nu*tt + 0.8*mm;
+        const rr = baseR * (1 + 0.28*mm);
+        const x  = cx + Math.cos(a)*rr;
+        const y  = cy + Math.sin(a)*rr*0.72;
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+      ctx.restore();
+
+      // center "potential well" / nucleus
+      ctx.save();
+      ctx.fillStyle = "rgba(255,255,255,0.08)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, baseR*0.18, 0, Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+
+      // particle
+      const glow = 18 + 30*transitionPulse;
+      radialDot(px, py, 7.5, glow);
+
+      // vector arrow showing motion direction
+      ctx.save();
+      const vx = -Math.sin(ang);
+      const vy =  Math.cos(ang)*0.72;
+      arrow(px, py, px + vx*42, py + vy*42, "rgba(255,255,255,0.35)");
+      ctx.restore();
+
+      // Text overlays
+      ctx.save();
+      ctx.fillStyle = "rgba(232,238,246,0.90)";
+      ctx.font = "12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+      ctx.fillText(`State ${state}: action J = ${J.toFixed(2)}   base ν = ${nu.toFixed(2)}   harmonics = ${N}`, scene.x+12, scene.y+26);
+      ctx.fillStyle = "rgba(188,208,234,0.9)";
+      ctx.fillText(`Motion = Σ aₙ cos(2π n ν t + φₙ)   (damping=${damp.toFixed(2)}, selection=${selectionText(sel)})`, scene.x+12, scene.y+44);
+      ctx.restore();
+
+      // ===== Spectrum =====
+      // Bar positions represent harmonic frequencies n*ν, heights represent amplitude.
+      const barCount = Math.max(1, N);
+      const maxF = (barCount+0.5)*nu;
+      const axisPad = 14;
+
+      // gather amplitudes for allowed harmonics
+      const amps = [];
+      let maxAmp = 1e-6;
+      for(let n=1; n<=barCount; n++){
+        if(!harmonicAllowed(n, sel)) {
+          amps.push({n, amp:0, allowed:false});
+          continue;
+        }
+        const amp = Math.exp(-damp*(n-1)) * (0.55 + 0.45*Math.sin(0.9*J + n*0.7));
+        amps.push({n, amp, allowed:true});
+        maxAmp = Math.max(maxAmp, amp);
+      }
+
+      // spectrum axis
+      ctx.save();
+      ctx.strokeStyle = "rgba(255,255,255,0.16)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(spec.x+axisPad, spec.y+spec.h-axisPad);
+      ctx.lineTo(spec.x+spec.w-axisPad, spec.y+spec.h-axisPad);
+      ctx.stroke();
+      ctx.restore();
+
+      // draw bars
+      for(let i=0; i<amps.length; i++){
+        const {n, amp, allowed} = amps[i];
+        const f = n*nu;
+        const x = map(f, 0, maxF, spec.x+axisPad, spec.x+spec.w-axisPad);
+        const h = (allowed ? (amp/maxAmp) : 0) * (spec.h*0.58);
+        const y0 = spec.y+spec.h-axisPad;
+        const y1 = y0 - h;
+
+        // line color roughly mapped by frequency (fake "wavelength feel")
+        const c = freqColor(f, maxF);
+
+        ctx.save();
+        ctx.strokeStyle = allowed ? c : "rgba(255,255,255,0.06)";
+        ctx.lineWidth = allowed ? 5 : 3;
+        ctx.globalAlpha = allowed ? 0.85 : 0.2;
+        ctx.beginPath();
+        ctx.moveTo(x, y0);
+        ctx.lineTo(x, y1);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // show emitted Δν as a bright line
+      if(emittedLine){
+        const dnu = emittedLine.dnu;
+        const x = map(dnu, 0, maxF, spec.x+axisPad, spec.x+spec.w-axisPad);
+        const y0 = spec.y+spec.h-axisPad;
+        const y1 = spec.y + 54;
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.92)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6,6]);
+        ctx.beginPath();
+        ctx.moveTo(x, y0);
+        ctx.lineTo(x, y1);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // label bubble
+        const label = `Δν = ${dnu.toFixed(3)}`;
+        bubble(x, y1-10, label, emittedLine.life);
+        ctx.restore();
+      }
+
+      // ===== Waveform history =====
+      // We'll plot the raw Fourier motion (m) vs time
+      const mNow = m; // -1..1
+      history.push(mNow);
+      while(history.length > historyMax) history.shift();
+
+      ctx.save();
+      const midY = wave.y + wave.h*0.58;
+      const ampY = wave.h*0.32;
+
+      // center line
+      ctx.strokeStyle = "rgba(255,255,255,0.12)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(wave.x+10, midY);
+      ctx.lineTo(wave.x+wave.w-10, midY);
+      ctx.stroke();
+
+      // waveform
+      ctx.strokeStyle = "rgba(180,220,255,0.75)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for(let i=0;i<history.length;i++){
+        const x = map(i, 0, historyMax-1, wave.x+10, wave.x+wave.w-10);
+        const y = midY - history[i]*ampY;
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+
+      // annotate: "frequency" marker
+      ctx.fillStyle = "rgba(188,208,234,0.95)";
+      ctx.font = "12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+      ctx.fillText(`This curve is your periodic motion in time. Fourier says it can be rebuilt from spectrum lines above.`, wave.x+12, wave.y+26);
+      ctx.restore();
+
+      requestAnimationFrame(draw);
+    }
+
+    // ======== UI actions ========
+    ui.btnPause.addEventListener('click', () => {
+      running = !running;
+      ui.btnPause.textContent = running ? "Pause" : "Play";
+      ui.modePill.textContent = running ? "RUNNING" : "PAUSED";
+      ui.modePill.style.opacity = running ? "1" : "0.7";
+    });
+
+    ui.btnTransition.addEventListener('click', () => {
+      const {J1, J2} = getParams();
+      const JA = (state === 'A') ? J1 : J2;
+      const JB = (state === 'A') ? J2 : J1;
+
+      // compute mean frequencies and difference
+      const nuA = meanFreqFromJ(JA);
+      const nuB = meanFreqFromJ(JB);
+      const dnu = Math.abs(nuB - nuA);
+
+      // toggle state
+      state = (state === 'A') ? 'B' : 'A';
+
+      // pulse + emit
+      transitionPulse = 1;
+      emittedLine = { dnu, life: 1 };
+    });
+
+    // ======== Helpers ========
+    function panel(r, title){
+      ctx.save();
+      // border
+      ctx.strokeStyle = "rgba(255,255,255,0.10)";
+      ctx.lineWidth = 1;
+      roundRect(r.x, r.y, r.w, r.h, 14);
+      ctx.stroke();
+
+      // title
+      ctx.fillStyle = "rgba(232,238,246,0.92)";
+      ctx.font = "13px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+      ctx.fillText(title, r.x+12, r.y+18);
+
+      // subtle inset
+      ctx.fillStyle = "rgba(0,0,0,0.12)";
+      roundRect(r.x+8, r.y+26, r.w-16, r.h-38, 12);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function roundRect(x,y,w,h,r){
+      const rr = Math.min(r, w/2, h/2);
+      ctx.beginPath();
+      ctx.moveTo(x+rr, y);
+      ctx.arcTo(x+w, y, x+w, y+h, rr);
+      ctx.arcTo(x+w, y+h, x, y+h, rr);
+      ctx.arcTo(x, y+h, x, y, rr);
+      ctx.arcTo(x, y, x+w, y, rr);
+      ctx.closePath();
+    }
+
+    function radialDot(x,y, coreR, glowR){
+      // glow
+      const g = ctx.createRadialGradient(x,y, 0, x,y, glowR);
+      g.addColorStop(0, "rgba(255,255,255,0.30)");
+      g.addColorStop(0.35, "rgba(180,220,255,0.16)");
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x,y, glowR, 0, Math.PI*2); ctx.fill();
+
+      // core
+      ctx.fillStyle = "rgba(255,255,255,0.88)";
+      ctx.beginPath(); ctx.arc(x,y, coreR, 0, Math.PI*2); ctx.fill();
+
+      ctx.strokeStyle = "rgba(180,220,255,0.55)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x,y, coreR+1.2, 0, Math.PI*2); ctx.stroke();
+    }
+
+    function arrow(x1,y1,x2,y2,color){
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x1,y1);
+      ctx.lineTo(x2,y2);
+      ctx.stroke();
+
+      const ang = Math.atan2(y2-y1, x2-x1);
+      const L = 10;
+      ctx.beginPath();
+      ctx.moveTo(x2,y2);
+      ctx.lineTo(x2 - L*Math.cos(ang-0.45), y2 - L*Math.sin(ang-0.45));
+      ctx.lineTo(x2 - L*Math.cos(ang+0.45), y2 - L*Math.sin(ang+0.45));
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+
+    function map(v,a,b,c,d){
+      const u = (v-a)/(b-a);
+      return c + u*(d-c);
+    }
+
+    // Color mapping based on frequency position (0..maxF). Not real spectroscopy.
+    function freqColor(f, maxF){
+      const u = clamp01(f / maxF);
+      // simple gradient: orange->violet-ish using rgba strings
+      const r = Math.round(255*(1 - 0.55*u));
+      const g = Math.round(200*(1 - 0.25*u));
+      const b = Math.round(120 + 135*u);
+      return `rgba(${r},${g},${b},0.9)`;
+    }
+
+    function bubble(x, y, text, life){
+      const a = clamp01(life);
+      ctx.save();
+      ctx.font = "12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+      const padX = 10, padY = 7;
+      const w = ctx.measureText(text).width + padX*2;
+      const h = 26;
+
+      const bx = x - w/2;
+      const by = y - h;
+
+      ctx.globalAlpha = 0.15 + 0.6*a;
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      roundRect(bx, by, w, h, 999);
+      ctx.fill();
+
+      ctx.globalAlpha = 0.35 + 0.55*a;
+      ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      ctx.lineWidth = 1;
+      roundRect(bx, by, w, h, 999);
+      ctx.stroke();
+
+      ctx.globalAlpha = 0.65 + 0.35*a;
+      ctx.fillStyle = "rgba(0,0,0,0.85)";
+      ctx.fillText(text, bx+padX, by+17);
+      ctx.restore();
+    }
+
+    // kick off
+    draw();
+  </script>
+</body>
+</html>

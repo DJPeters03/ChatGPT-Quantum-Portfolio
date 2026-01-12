@@ -1,0 +1,517 @@
+<!-- 02_bohr_correspondence_frequency.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Origin of Quantum 02 — Bohr Orbits: Emitted Light vs Orbital Frequency (Correspondence)</title>
+  <style>
+    :root{ color-scheme: dark; }
+    *{ box-sizing: border-box; }
+    body{
+      margin:0; background:#0b0f14; color:#e8eef6;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      display:flex; justify-content:center; padding:14px;
+    }
+    .wrap{ width:min(1200px, 96vw); display:grid; gap:12px; }
+    .card{
+      background:#0f1622; border:1px solid rgba(255,255,255,.10);
+      border-radius:14px; padding:12px 12px 14px;
+      box-shadow: 0 10px 26px rgba(0,0,0,.28);
+    }
+    h1{ margin:0 0 6px; font-size:18px; }
+    .sub{ opacity:.82; font-size:13px; line-height:1.35; }
+    .grid{ display:grid; gap:12px; grid-template-columns: 1.15fr 0.85fr; }
+    @media (max-width: 980px){ .grid{ grid-template-columns: 1fr; } }
+    canvas{ width:100%; height:auto; border-radius:12px; background: radial-gradient(1200px 700px at 50% 45%, rgba(124,210,255,.10), rgba(0,0,0,0) 55%); border:1px solid rgba(255,255,255,.08); }
+    .controls{ display:grid; gap:10px; }
+    .row{ display:grid; gap:8px; grid-template-columns: 1fr auto; align-items:center; }
+    label{ font-size:13px; opacity:.9; }
+    input[type="range"]{ width:100%; }
+    select, button{
+      background:#0b1220; color:#e8eef6; border:1px solid rgba(255,255,255,.14);
+      border-radius:10px; padding:10px 10px; font-size:14px;
+    }
+    button{ cursor:pointer; font-weight:700; }
+    button:active{ transform: translateY(1px); }
+    .pill{
+      display:inline-flex; gap:8px; align-items:center; padding:8px 10px;
+      border:1px solid rgba(255,255,255,.12); border-radius:999px;
+      background: rgba(255,255,255,.03);
+      font-size:12px; opacity:.95;
+    }
+    .stats{
+      display:grid; gap:10px;
+      grid-template-columns: 1fr 1fr;
+    }
+    @media (max-width: 520px){ .stats{ grid-template-columns:1fr; } }
+    .box{
+      background: rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:12px; padding:10px;
+    }
+    .k{ font-size:12px; opacity:.8; }
+    .v{ font-size:14px; font-weight:800; margin-top:4px; }
+    .hint{ font-size:12px; opacity:.75; line-height:1.35; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .tiny{ font-size:11px; opacity:.72; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Bohr Orbits: Emitted Light vs Orbital Frequency (Correspondence Principle)</h1>
+      <div class="sub">
+        This demo matches the vibe of the page you photographed:
+        <span class="mono">E<sub>n</sub> ∝ −1/n²</span> (Bohr energy levels) and
+        the “correspondence” idea: for large <span class="mono">n</span>,
+        the light frequency from a small jump (like <span class="mono">n → n−1</span>)
+        starts to approach the electron’s orbital revolution frequency.
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <canvas id="c" width="980" height="640"></canvas>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+          <div class="pill"><span>●</span> Orbit radius ~ <span class="mono">a₀ n² / Z</span></div>
+          <div class="pill"><span>≋</span> Emitted photon: bars/wave shoot outward</div>
+          <div class="pill"><span>⟲</span> Electron dot: angular speed ~ orbital frequency</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="controls">
+          <div class="row">
+            <label for="Z">Nuclear charge (hydrogen-like) <span class="mono">Z</span></label>
+            <select id="Z">
+              <option value="1" selected>1 (Hydrogen)</option>
+              <option value="2">2 (He⁺)</option>
+              <option value="3">3 (Li²⁺)</option>
+              <option value="4">4 (Be³⁺)</option>
+            </select>
+          </div>
+
+          <div class="row">
+            <label for="nHi">Start level <span class="mono">nᵢ</span> (higher)</label>
+            <div class="mono" id="nHiVal">5</div>
+          </div>
+          <input id="nHi" type="range" min="2" max="25" value="5" />
+
+          <div class="row">
+            <label for="nLo">End level <span class="mono">n𝒇</span> (lower)</label>
+            <div class="mono" id="nLoVal">2</div>
+          </div>
+          <input id="nLo" type="range" min="1" max="24" value="2" />
+
+          <div class="row">
+            <label for="mode">Compare which orbital frequency?</label>
+            <select id="mode">
+              <option value="initial" selected>Initial orbit (nᵢ)</option>
+              <option value="final">Final orbit (n𝒇)</option>
+              <option value="mid">Midpoint (average n)</option>
+            </select>
+          </div>
+
+          <div class="row">
+            <label for="speed">Animation speed</label>
+            <input id="speed" type="range" min="0.3" max="2.0" value="1.0" step="0.01" />
+          </div>
+
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button id="emit">Collapse / Emit photon</button>
+            <button id="random">Random jump</button>
+            <button id="reset">Reset</button>
+          </div>
+
+          <div class="stats">
+            <div class="box">
+              <div class="k">Energy levels (eV)</div>
+              <div class="v mono" id="Evals">—</div>
+              <div class="tiny mono" id="Eformula">Eₙ = −13.6·Z² / n²</div>
+            </div>
+            <div class="box">
+              <div class="k">Photon from jump</div>
+              <div class="v mono" id="photon">—</div>
+              <div class="tiny mono" id="pformula">ΔE = h·f,  λ = c/f</div>
+            </div>
+            <div class="box">
+              <div class="k">Orbital frequency (approx)</div>
+              <div class="v mono" id="forbit">—</div>
+              <div class="tiny mono" id="offormula">fₒᵣᵦ ~ (const)·Z² / n³</div>
+            </div>
+            <div class="box">
+              <div class="k">Correspondence check</div>
+              <div class="v mono" id="ratio">—</div>
+              <div class="hint">
+                If <span class="mono">f_emit / f_orbit → 1</span> as <span class="mono">n</span> gets large (for small jumps),
+                you’re seeing the “classical limit” idea from the text.
+              </div>
+            </div>
+          </div>
+
+          <div class="box">
+            <div class="k">Try this</div>
+            <div class="hint">
+              Set <span class="mono">nᵢ = 20</span> and <span class="mono">n𝒇 = 19</span>. That’s a tiny drop.
+              The emitted frequency gets closer to the orbit frequency than, say, <span class="mono">5 → 2</span>.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="sub">
+        Notes: This uses the standard Bohr-model formulas (great for intuition, not the full quantum picture).
+        In your photo, they’re basically arguing that in the limit of large <span class="mono">n</span>, the radiation frequency
+        from nearby levels starts matching a “classical” orbital frequency—this is what the bottom “ratio” box is illustrating.
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // Canvas
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  // UI
+  const Zsel = document.getElementById('Z');
+  const nHi = document.getElementById('nHi');
+  const nLo = document.getElementById('nLo');
+  const nHiVal = document.getElementById('nHiVal');
+  const nLoVal = document.getElementById('nLoVal');
+  const mode = document.getElementById('mode');
+  const speed = document.getElementById('speed');
+
+  const Evals = document.getElementById('Evals');
+  const photon = document.getElementById('photon');
+  const forbit = document.getElementById('forbit');
+  const ratio = document.getElementById('ratio');
+
+  const btnEmit = document.getElementById('emit');
+  const btnRandom = document.getElementById('random');
+  const btnReset = document.getElementById('reset');
+
+  // Physics-ish constants (for display)
+  // Bohr energies in eV: E_n = -13.6 Z^2 / n^2
+  const Ry_eV = 13.6; // hydrogen ground state magnitude
+  const h = 6.62607015e-34;      // J*s
+  const e = 1.602176634e-19;     // J per eV
+  const c = 299792458;           // m/s
+
+  // Orbital frequency scale:
+  // We only need a consistent ~ Z^2 / n^3 dependence (as in many Bohr-era derivations).
+  // We'll choose a base so values feel human-readable:
+  const f0 = 6.58e15; // ~ sets hydrogen n=1 orbital frequency to a few PHz (order-ish)
+
+  // Scene state
+  let t = 0;
+  let last = performance.now();
+  let emitting = false;
+
+  const center = { x: 490, y: 310 };
+  const ringBase = 70;
+  const ringStep = 18;
+
+  // Particles that represent the "photon bars" shooting outward
+  const bars = [];
+
+  function clampInt(x, lo, hi){
+    x = Math.round(Number(x));
+    if (!Number.isFinite(x)) x = lo;
+    return Math.max(lo, Math.min(hi, x));
+  }
+
+  function ensureValidLevels(){
+    let hi = clampInt(nHi.value, 2, 25);
+    let lo = clampInt(nLo.value, 1, 24);
+    if (lo >= hi) lo = Math.max(1, hi - 1);
+    nHi.value = hi;
+    nLo.value = lo;
+    nHi.max = 25;
+    nLo.max = String(hi - 1);
+    nHiVal.textContent = hi;
+    nLoVal.textContent = lo;
+  }
+
+  function energy_eV(n, Z){
+    return -Ry_eV * Z * Z / (n * n);
+  }
+
+  function photonFromJump(ni, nf, Z){
+    // ΔE (positive for emission when nf < ni)
+    const Ei = energy_eV(ni, Z);
+    const Ef = energy_eV(nf, Z);
+    const dE_eV = Ei - Ef; // should be > 0 for emission
+    const dE_J = dE_eV * e;
+
+    const f = dE_J / h;               // Hz
+    const lambda = c / f;             // meters
+    return { dE_eV, f, lambda };
+  }
+
+  function orbitalFrequency(n, Z){
+    // Approx dependence ~ Z^2 / n^3
+    return f0 * (Z * Z) / (n * n * n);
+  }
+
+  function chosenOrbitN(ni, nf){
+    const m = mode.value;
+    if (m === 'initial') return ni;
+    if (m === 'final') return nf;
+    return (ni + nf) / 2;
+  }
+
+  function fmtSI(x, unit){
+    if (!Number.isFinite(x)) return "—";
+    const abs = Math.abs(x);
+    const scales = [
+      { s: 1e24, p: "Y" }, { s: 1e21, p: "Z" }, { s: 1e18, p: "E" },
+      { s: 1e15, p: "P" }, { s: 1e12, p: "T" }, { s: 1e9,  p: "G" },
+      { s: 1e6,  p: "M" }, { s: 1e3,  p: "k" }, { s: 1,    p: ""  },
+      { s: 1e-3, p: "m" }, { s: 1e-6, p: "µ" }, { s: 1e-9, p: "n" },
+      { s: 1e-12,p: "p" }, { s: 1e-15,p: "f" }, { s: 1e-18,p: "a" }
+    ];
+    for (const sc of scales){
+      if (abs >= sc.s || sc.s === 1e-18){
+        const v = x / sc.s;
+        const digits = Math.abs(v) >= 100 ? 1 : (Math.abs(v) >= 10 ? 2 : 3);
+        return `${v.toFixed(digits)} ${sc.p}${unit}`;
+      }
+    }
+    return `${x.toFixed(3)} ${unit}`;
+  }
+
+  function fmtWavelength(m){
+    // prefer nm/µm for visible-ish values
+    if (!Number.isFinite(m)) return "—";
+    if (m < 1e-6) return fmtSI(m, "m"); // shows nm, pm, etc via prefixes
+    if (m < 1e-3) return fmtSI(m, "m");
+    return `${m.toFixed(3)} m`;
+  }
+
+  function updateReadouts(){
+    ensureValidLevels();
+    const Z = Number(Zsel.value);
+    const ni = Number(nHi.value);
+    const nf = Number(nLo.value);
+
+    const Ei = energy_eV(ni, Z);
+    const Ef = energy_eV(nf, Z);
+    Evals.textContent = `E_${ni} = ${Ei.toFixed(4)} eV   |   E_${nf} = ${Ef.toFixed(4)} eV`;
+
+    const ph = photonFromJump(ni, nf, Z);
+    photon.textContent = `ΔE = ${ph.dE_eV.toFixed(4)} eV   |   f = ${fmtSI(ph.f, "Hz")}   |   λ = ${fmtWavelength(ph.lambda)}`;
+
+    const nOrb = chosenOrbitN(ni, nf);
+    const fOrb = orbitalFrequency(nOrb, Z);
+    forbit.textContent = `f_orbit(n≈${nOrb.toFixed(1)}) = ${fmtSI(fOrb, "Hz")}`;
+
+    const r = ph.f / fOrb;
+    ratio.textContent = `f_emit / f_orbit ≈ ${Number.isFinite(r) ? r.toFixed(4) : "—"}`;
+  }
+
+  function addPhotonBars(){
+    // Create outward-moving bars (like the “little bars of energy” vibe)
+    const count = 42;
+    for (let i = 0; i < count; i++){
+      const ang = (Math.PI * 2) * (i / count) + (Math.random() - 0.5) * 0.08;
+      bars.push({
+        a: ang,
+        r: 0,
+        v: 210 + Math.random() * 260,
+        life: 0,
+        max: 0.9 + Math.random() * 0.45
+      });
+    }
+  }
+
+  function draw(){
+    // time
+    const now = performance.now();
+    const dt = Math.min(0.035, (now - last) / 1000);
+    last = now;
+    t += dt * Number(speed.value);
+
+    // values
+    const Z = Number(Zsel.value);
+    const ni = Number(nHi.value);
+    const nf = Number(nLo.value);
+
+    // radius mapping (visual)
+    const r_i = ringBase + ringStep * ni;
+    const r_f = ringBase + ringStep * nf;
+
+    // animate current orbit radius: if emitting, smoothly shrink toward nf then stop
+    let rOrbit = r_i;
+    if (emitting){
+      // ease down over ~0.85s
+      const tau = 0.85;
+      // store emission timer on canvas element (cheap state)
+      canvas._emitT = (canvas._emitT ?? 0) + dt * Number(speed.value);
+      const u = Math.min(1, canvas._emitT / tau);
+      const ease = u < 0.5 ? 2*u*u : 1 - Math.pow(-2*u+2, 2)/2; // easeInOutQuad
+      rOrbit = r_i + (r_f - r_i) * ease;
+
+      if (u >= 1){
+        // finish: update ni to nf, stop emitting
+        emitting = false;
+        canvas._emitT = 0;
+        nHi.value = String(Math.max(2, nf)); // keep at least 2 in UI
+        // after collapse, set a "new" higher state so user can jump again:
+        // we'll just make it nf+1 to keep continuity
+        const newHi = Math.min(25, Math.max(2, nf + 1));
+        nHi.value = String(newHi);
+        nLo.max = String(newHi - 1);
+        nLo.value = String(Math.min(newHi - 1, nf));
+        ensureValidLevels();
+        updateReadouts();
+      }
+    }
+
+    // background
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // soft vignette
+    const g = ctx.createRadialGradient(center.x, center.y, 40, center.x, center.y, 460);
+    g.addColorStop(0, "rgba(124,210,255,0.10)");
+    g.addColorStop(1, "rgba(0,0,0,0.0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // nucleus glow
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, 10 + 2*Math.sin(t*2), 0, Math.PI*2);
+    ctx.fillStyle = "rgba(255,220,140,0.90)";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, 26, 0, Math.PI*2);
+    ctx.fillStyle = "rgba(255,220,140,0.10)";
+    ctx.fill();
+
+    // orbit rings
+    ctx.lineWidth = 1;
+    for (let n = 1; n <= 25; n++){
+      const r = ringBase + ringStep * n;
+      const alpha = (n === ni || n === nf) ? 0.65 : 0.18;
+      ctx.strokeStyle = `rgba(170,210,255,${alpha})`;
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, r, 0, Math.PI*2);
+      ctx.stroke();
+      if (n === ni || n === nf){
+        ctx.fillStyle = `rgba(170,210,255,${alpha})`;
+        ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
+        ctx.fillText(`n=${n}`, center.x + r + 10, center.y + 4);
+      }
+    }
+
+    // orbital frequency => angular speed (visual)
+    const nOrb = chosenOrbitN(ni, nf);
+    const fOrb = orbitalFrequency(nOrb, Z);
+    // map huge Hz to a pleasant on-screen angular speed:
+    // keep dependence on Z^2/n^3, but compress massively.
+    const omega = 0.8 + 4.2 * (Z*Z) / Math.pow(nOrb, 1.15); // purely visual, still monotonic
+
+    // electron
+    const ang = t * omega;
+    const ex = center.x + Math.cos(ang) * rOrbit;
+    const ey = center.y + Math.sin(ang) * rOrbit;
+
+    ctx.beginPath();
+    ctx.arc(ex, ey, 7.5, 0, Math.PI*2);
+    ctx.fillStyle = "rgba(140,255,210,0.95)";
+    ctx.fill();
+
+    // electron trail hint
+    ctx.beginPath();
+    ctx.arc(ex, ey, 18, 0, Math.PI*2);
+    ctx.fillStyle = "rgba(140,255,210,0.08)";
+    ctx.fill();
+
+    // show text overlay
+    ctx.fillStyle = "rgba(232,238,246,0.92)";
+    ctx.font = "14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.fillText(`Z = ${Z}   |   Jump: nᵢ=${ni} → n𝒇=${nf}`, 16, 26);
+
+    ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
+    const ph = photonFromJump(ni, nf, Z);
+    const rVal = ph.f / fOrb;
+    ctx.fillStyle = "rgba(232,238,246,0.86)";
+    ctx.fillText(`Eₙ = −13.6·Z²/n² eV`, 16, 48);
+    ctx.fillText(`f_emit = ΔE/h  ≈ ${fmtSI(ph.f,"Hz")}   |   f_orbit ~ Z²/n³ ≈ ${fmtSI(fOrb,"Hz")}   |   ratio ≈ ${Number.isFinite(rVal)?rVal.toFixed(4):"—"}`, 16, 68);
+
+    // photon bars
+    for (let i = bars.length - 1; i >= 0; i--){
+      const b = bars[i];
+      b.life += dt * Number(speed.value);
+      b.r += b.v * dt * Number(speed.value);
+      const fade = 1 - (b.life / b.max);
+      const rr = b.r;
+
+      const x1 = center.x + Math.cos(b.a) * rr;
+      const y1 = center.y + Math.sin(b.a) * rr;
+      const x2 = center.x + Math.cos(b.a) * (rr + 18);
+      const y2 = center.y + Math.sin(b.a) * (rr + 18);
+
+      ctx.strokeStyle = `rgba(255,170,120,${Math.max(0, fade) * 0.9})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+
+      if (b.life >= b.max) bars.splice(i, 1);
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  // events
+  function sync(){
+    ensureValidLevels();
+    updateReadouts();
+  }
+
+  nHi.addEventListener('input', sync);
+  nLo.addEventListener('input', sync);
+  Zsel.addEventListener('change', sync);
+  mode.addEventListener('change', sync);
+
+  btnEmit.addEventListener('click', () => {
+    ensureValidLevels();
+    // start emission animation + create bars
+    emitting = true;
+    canvas._emitT = 0;
+    addPhotonBars();
+  });
+
+  btnRandom.addEventListener('click', () => {
+    const hi = clampInt(2 + Math.random()*23, 2, 25);
+    const lo = clampInt(1 + Math.random()*(hi-1), 1, hi-1);
+    nHi.value = String(hi);
+    nLo.value = String(lo);
+    ensureValidLevels();
+    updateReadouts();
+  });
+
+  btnReset.addEventListener('click', () => {
+    Zsel.value = "1";
+    nHi.value = "5";
+    nLo.value = "2";
+    mode.value = "initial";
+    speed.value = "1.0";
+    emitting = false;
+    canvas._emitT = 0;
+    bars.splice(0, bars.length);
+    sync();
+  });
+
+  // init
+  sync();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

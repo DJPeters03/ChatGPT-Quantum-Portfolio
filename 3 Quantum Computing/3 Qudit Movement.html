@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>One Qudit — Ring Movement (Shift + Phase)</title>
+  <style>
+    :root{ color-scheme: dark; }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0; background:#0b0f14; color:#e8eef6;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      display:flex; justify-content:center; padding:14px;
+    }
+    .wrap{ width:min(1100px, 96vw); display:grid; gap:12px; }
+    .card{
+      background:#0f1622;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:14px;
+      padding:12px;
+      box-shadow: 0 10px 28px rgba(0,0,0,.25);
+    }
+    h1{ margin:0 0 6px 0; font-size:18px; }
+    .sub{ margin:0 0 10px 0; color:rgba(232,238,246,.78); font-size:13px; line-height:1.35; }
+    canvas{
+      width:100%; height:auto; display:block;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.08);
+      background: radial-gradient(900px 500px at 30% 20%, rgba(90,140,255,.12), transparent 55%),
+                  linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01));
+    }
+    .grid{
+      display:grid; gap:10px;
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+    @media (max-width: 980px){ .grid{ grid-template-columns:1fr; } }
+    .ctl{
+      background:#0c1320;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:12px;
+      padding:10px;
+    }
+    .ctl label{
+      display:flex; justify-content:space-between; gap:10px;
+      font-size:12px; color:rgba(232,238,246,.85); margin-bottom:6px;
+    }
+    input[type="range"]{ width:100%; }
+    .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    button{
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.05);
+      color:#e8eef6;
+      padding:9px 10px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:700;
+      font-size:12px;
+    }
+    button:hover{ background:rgba(255,255,255,.08); }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .small{ font-size:11.5px; color:rgba(232,238,246,.72); line-height:1.35; margin-top:6px; }
+    .panel{
+      display:grid; gap:8px;
+      grid-template-columns: 1fr;
+    }
+    .kv{ display:grid; grid-template-columns: 1fr auto; gap:8px; font-size:12px; color:rgba(232,238,246,.82); }
+    .hr{ height:1px; background:rgba(255,255,255,.10); margin:10px 0; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>One Qudit — Movement on a Ring (|0⟩…|d−1⟩)</h1>
+    <p class="sub">
+      A <b>qudit</b> is a quantum system with <span class="mono">d</span> basis states.
+      This demo visualizes a single qudit as a “token” that can be in a <b>superposition across d ring positions</b>.
+      The token “moves” when we apply the <b>Shift operator</b> <span class="mono">X</span> (wraps around the ring).
+      A <b>Phase operator</b> <span class="mono">Z</span> changes phases (affects interference if you mix operations).
+    </p>
+
+    <canvas id="c" width="1000" height="560"></canvas>
+
+    <div class="hr"></div>
+
+    <div class="grid">
+      <div class="ctl">
+        <label><span>Dimension d</span><span class="mono" id="dLabel">5</span></label>
+        <input id="d" type="range" min="3" max="9" step="1" value="5"/>
+        <div class="small">Try d=3 (qutrit) or d=5/7 to feel the generalization beyond qubits.</div>
+      </div>
+
+      <div class="ctl">
+        <label><span>Auto-step speed</span><span class="mono" id="spdLabel">1.00×</span></label>
+        <input id="spd" type="range" min="0" max="3" step="0.05" value="1"/>
+        <div class="small">0 = paused. Otherwise it repeatedly applies the chosen motion each tick.</div>
+      </div>
+
+      <div class="ctl">
+        <label><span>Mix (interference)</span><span class="mono" id="mixLabel">0.35</span></label>
+        <input id="mix" type="range" min="0" max="1" step="0.01" value="0.35"/>
+        <div class="small">How much amplitude “spreads” to neighbors each step (simple unitary-like mixer).</div>
+      </div>
+
+      <div class="ctl">
+        <div class="row">
+          <button id="btnX">Apply X (shift +1)</button>
+          <button id="btnXm">Apply X⁻¹</button>
+          <button id="btnZ">Apply Z (phase)</button>
+          <button id="btnM">Measure</button>
+          <button id="btnReset">Reset |0⟩</button>
+          <button id="btnRand">Randomize</button>
+        </div>
+        <div class="small">
+          <span class="mono">X|k⟩ = |k+1 mod d⟩</span> (movement). &nbsp;
+          <span class="mono">Z|k⟩ = ω^k |k⟩</span>, ω = e^{2πi/d} (phase).
+        </div>
+      </div>
+
+      <div class="ctl">
+        <div class="panel">
+          <div class="kv"><span>State (amplitudes)</span><b class="mono">ψ[k]</b></div>
+          <div class="small">Bars show probabilities |ψ[k]|². Tiny arrows show phases (argument).</div>
+          <div class="kv"><span>Most likely position</span><b class="mono" id="ml">—</b></div>
+          <div class="kv"><span>Shannon entropy</span><b class="mono" id="H">—</b></div>
+        </div>
+      </div>
+
+      <div class="ctl">
+        <div class="small">
+          <b>What you’re seeing</b><br/>
+          • Ring nodes = basis states |0⟩…|d−1⟩<br/>
+          • Glow at each node = probability |ψ[k]|²<br/>
+          • “Token” is the distribution itself (not a classical dot)<br/>
+          • Measurement collapses to one node by probability
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ---- Canvas setup ----
+  const cvs = document.getElementById('c');
+  const ctx = cvs.getContext('2d');
+
+  // ---- UI ----
+  const dEl = document.getElementById('d');
+  const spdEl = document.getElementById('spd');
+  const mixEl = document.getElementById('mix');
+  const dLabel = document.getElementById('dLabel');
+  const spdLabel = document.getElementById('spdLabel');
+  const mixLabel = document.getElementById('mixLabel');
+  const mlEl = document.getElementById('ml');
+  const HEl = document.getElementById('H');
+
+  const btnX = document.getElementById('btnX');
+  const btnXm = document.getElementById('btnXm');
+  const btnZ = document.getElementById('btnZ');
+  const btnM = document.getElementById('btnM');
+  const btnReset = document.getElementById('btnReset');
+  const btnRand = document.getElementById('btnRand');
+
+  // ---- Complex helpers ----
+  const C = (re, im) => ({re, im});
+  const add = (a,b)=>C(a.re+b.re, a.im+b.im);
+  const sub = (a,b)=>C(a.re-b.re, a.im-b.im);
+  const mul = (a,b)=>C(a.re*b.re - a.im*b.im, a.re*b.im + a.im*b.re);
+  const scale = (a,s)=>C(a.re*s, a.im*s);
+  const conj = (a)=>C(a.re, -a.im);
+  const abs2 = (a)=>a.re*a.re + a.im*a.im;
+  const abs = (a)=>Math.sqrt(abs2(a));
+  const arg = (a)=>Math.atan2(a.im, a.re);
+
+  function cis(theta){ return C(Math.cos(theta), Math.sin(theta)); }
+
+  function normalize(psi){
+    let s = 0;
+    for(const z of psi) s += abs2(z);
+    s = Math.sqrt(Math.max(1e-16, s));
+    for(let i=0;i<psi.length;i++) psi[i] = scale(psi[i], 1/s);
+  }
+
+  function probs(psi){ return psi.map(abs2); }
+
+  function entropy(p){
+    let H = 0;
+    for(const x of p){
+      if(x > 1e-12) H += -x * Math.log2(x);
+    }
+    return H;
+  }
+
+  // ---- Qudit state ----
+  const state = {
+    d: 5,
+    psi: [],
+    phaseTick: 0,
+    speed: 1,
+    mix: 0.35,
+    autoMode: "X" // "X" or "Z" or "mix"
+  };
+
+  function resetToBasis0(){
+    state.psi = Array.from({length: state.d}, (_,k)=> (k===0? C(1,0) : C(0,0)));
+    state.phaseTick = 0;
+    normalize(state.psi);
+  }
+
+  function randomize(){
+    state.psi = Array.from({length: state.d}, ()=> C(randn(), randn()));
+    normalize(state.psi);
+  }
+
+  function randn(){
+    // Box-Muller
+    let u = 1 - Math.random();
+    let v = 1 - Math.random();
+    return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+  }
+
+  // Shift operator X: (X psi)[k] = psi[k-1]
+  function applyX(step=+1){
+    const d = state.d;
+    const out = Array.from({length:d}, ()=>C(0,0));
+    for(let k=0;k<d;k++){
+      const src = (k - step) % d;
+      const s = (src<0)? src+d : src;
+      out[k] = state.psi[s];
+    }
+    state.psi = out;
+  }
+
+  // Phase operator Z: multiply basis |k> by ω^k
+  function applyZ(power=1){
+    const d = state.d;
+    const omega = 2*Math.PI/d;
+    for(let k=0;k<d;k++){
+      const ph = cis(omega * k * power);
+      state.psi[k] = mul(state.psi[k], ph);
+    }
+  }
+
+  // Simple "mixer" step to create interference-like spreading:
+  // psi' = a*psi + b*(shift+ + shift-) then renormalize.
+  function applyMixer(){
+    const d = state.d;
+    const a = 1 - state.mix;
+    const b = state.mix * 0.5;
+
+    const out = Array.from({length:d}, ()=>C(0,0));
+    for(let k=0;k<d;k++){
+      const kp = (k+1)%d;
+      const km = (k-1+d)%d;
+      out[k] = add(
+        scale(state.psi[k], a),
+        add(scale(state.psi[kp], b), scale(state.psi[km], b))
+      );
+    }
+    state.psi = out;
+    normalize(state.psi);
+  }
+
+  function measure(){
+    const p = probs(state.psi);
+    // sample index
+    let r = Math.random();
+    let idx = 0;
+    for(let i=0;i<p.length;i++){
+      r -= p[i];
+      if(r <= 0){ idx = i; break; }
+    }
+    // collapse
+    state.psi = Array.from({length: state.d}, (_,k)=> (k===idx? C(1,0) : C(0,0)));
+    state.phaseTick = 0;
+  }
+
+  // ---- Drawing ----
+  function clear(){
+    ctx.clearRect(0,0,cvs.width,cvs.height);
+
+    // faint grid
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    const gx=12, gy=8;
+    for(let i=1;i<gx;i++){
+      const x = (i/gx)*cvs.width;
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,cvs.height); ctx.stroke();
+    }
+    for(let j=1;j<gy;j++){
+      const y = (j/gy)*cvs.height;
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(cvs.width,y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawRing(){
+    const W = cvs.width, H = cvs.height;
+    const cx = W*0.36, cy = H*0.52;
+    const R  = Math.min(W,H)*0.28;
+
+    const d = state.d;
+    const p = probs(state.psi);
+
+    // ring
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+
+    // nodes
+    for(let k=0;k<d;k++){
+      const ang = -Math.PI/2 + (2*Math.PI*k/d);
+      const x = cx + R*Math.cos(ang);
+      const y = cy + R*Math.sin(ang);
+
+      // glow based on probability
+      const pk = p[k];
+      const glow = 6 + 38*Math.sqrt(pk);
+      ctx.save();
+      ctx.globalAlpha = 0.65;
+      ctx.fillStyle = "rgba(90,140,255,0.22)";
+      ctx.beginPath(); ctx.arc(x,y, glow, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+
+      // node core
+      ctx.save();
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      ctx.strokeStyle = "rgba(255,255,255,0.25)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x,y, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.restore();
+
+      // label
+      ctx.save();
+      ctx.fillStyle = "rgba(232,238,246,0.9)";
+      ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(`|${k}⟩`, x, y - 16);
+      ctx.restore();
+
+      // tiny phase arrow from node
+      const ph = arg(state.psi[k]);
+      const ax = x + 18*Math.cos(ph);
+      const ay = y + 18*Math.sin(ph);
+      ctx.save();
+      ctx.strokeStyle = "rgba(255,255,255,0.40)";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(ax,ay); ctx.stroke();
+      ctx.restore();
+    }
+
+    // direction hint
+    ctx.save();
+    ctx.fillStyle = "rgba(232,238,246,0.78)";
+    ctx.font = "12.5px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.fillText("Shift X moves amplitude around the ring (wrap-around).", cx - R, cy + R + 28);
+    ctx.restore();
+
+    return {cx, cy, R};
+  }
+
+  function drawBars(){
+    const W = cvs.width, H = cvs.height;
+    const left = W*0.66;
+    const top  = H*0.16;
+    const bw   = W*0.30;
+    const bh   = H*0.66;
+
+    const d = state.d;
+    const p = probs(state.psi);
+
+    // frame
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(left, top, bw, bh);
+    ctx.restore();
+
+    // title
+    ctx.save();
+    ctx.fillStyle = "rgba(232,238,246,0.9)";
+    ctx.font = "13px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.fillText("Probabilities |ψ[k]|²", left, top - 10);
+    ctx.restore();
+
+    // bars
+    const pad = 12;
+    const innerW = bw - 2*pad;
+    const innerH = bh - 2*pad;
+
+    const gap = 8;
+    const barW = (innerW - gap*(d-1)) / d;
+
+    for(let k=0;k<d;k++){
+      const pk = p[k];
+      const hgt = innerH * pk;
+      const x = left + pad + k*(barW+gap);
+      const y = top + pad + (innerH - hgt);
+
+      // bar
+      ctx.save();
+      ctx.fillStyle = "rgba(90,140,255,0.45)";
+      ctx.strokeStyle = "rgba(255,255,255,0.14)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      roundRect(ctx, x, y, barW, hgt, 8);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      // value
+      ctx.save();
+      ctx.fillStyle = "rgba(232,238,246,0.82)";
+      ctx.font = "11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(pk.toFixed(2), x + barW/2, top + bh + 18);
+      ctx.restore();
+    }
+
+    // basis axis label
+    ctx.save();
+    ctx.fillStyle = "rgba(232,238,246,0.70)";
+    ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("k = 0 … d−1", left + bw/2, top + bh + 36);
+    ctx.restore();
+  }
+
+  function roundRect(ctx, x, y, w, h, r){
+    r = Math.min(r, w/2, h/2);
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y, x+w, y+h, r);
+    ctx.arcTo(x+w, y+h, x, y+h, r);
+    ctx.arcTo(x, y+h, x, y, r);
+    ctx.arcTo(x, y, x+w, y, r);
+    ctx.closePath();
+  }
+
+  function updateStats(){
+    const p = probs(state.psi);
+    let best = 0, bestVal = -1;
+    for(let i=0;i<p.length;i++){
+      if(p[i] > bestVal){ bestVal = p[i]; best = i; }
+    }
+    mlEl.textContent = `k=${best}  (p≈${bestVal.toFixed(3)})`;
+    HEl.textContent = entropy(p).toFixed(3) + " bits";
+  }
+
+  function draw(){
+    clear();
+    drawRing();
+    drawBars();
+    updateStats();
+
+    // footer info
+    ctx.save();
+    ctx.fillStyle = "rgba(232,238,246,0.78)";
+    ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    ctx.fillText(`d=${state.d}   mix=${state.mix.toFixed(2)}   speed=${state.speed.toFixed(2)}×`, 18, cvs.height - 18);
+    ctx.restore();
+  }
+
+  // ---- Animation loop ----
+  let last = performance.now();
+  function tick(now){
+    const dt = Math.min(0.05, (now - last)/1000);
+    last = now;
+
+    // speed: interpret as "operations per second"
+    const opsPerSec = state.speed * 2.0; // base rate
+    const ops = opsPerSec * dt;
+
+    // accumulate fractional ops
+    acc += ops;
+    while(acc >= 1){
+      // each op: optional phase drift + mixing + shift (movement)
+      // This makes it feel alive and shows "movement" plus interference.
+      applyMixer();
+      applyX(+1);
+      applyZ(+1); // slow rotating phases around ring
+      state.phaseTick++;
+      acc -= 1;
+    }
+
+    draw();
+    requestAnimationFrame(tick);
+  }
+  let acc = 0;
+
+  // ---- Controls ----
+  function setD(newD){
+    state.d = newD;
+    dLabel.textContent = String(state.d);
+    resetToBasis0();
+  }
+
+  dEl.oninput = () => setD(+dEl.value);
+
+  spdEl.oninput = () => {
+    state.speed = +spdEl.value;
+    spdLabel.textContent = state.speed.toFixed(2) + "×";
+    // if speed=0, animation still draws but stops evolving because acc never increases
+  };
+
+  mixEl.oninput = () => {
+    state.mix = +mixEl.value;
+    mixLabel.textContent = state.mix.toFixed(2);
+  };
+
+  btnX.onclick  = () => { applyMixer(); applyX(+1); draw(); };
+  btnXm.onclick = () => { applyMixer(); applyX(-1); draw(); };
+  btnZ.onclick  = () => { applyZ(+1); draw(); };
+  btnM.onclick  = () => { measure(); draw(); };
+  btnReset.onclick = () => { resetToBasis0(); draw(); };
+  btnRand.onclick  = () => { randomize(); draw(); };
+
+  // ---- Init ----
+  setD(state.d);
+  state.speed = +spdEl.value; spdLabel.textContent = state.speed.toFixed(2) + "×";
+  state.mix = +mixEl.value; mixLabel.textContent = state.mix.toFixed(2);
+
+  // crisp resize
+  function fit(){
+    const rect = cvs.getBoundingClientRect();
+    const dpr = Math.max(1, Math.min(2.25, window.devicePixelRatio || 1));
+    const w = Math.floor(rect.width * dpr);
+    const h = Math.floor(rect.width * 0.56 * dpr);
+    if(cvs.width !== w || cvs.height !== h){
+      cvs.width = w; cvs.height = h;
+      draw();
+    }
+  }
+  window.addEventListener('resize', fit);
+  setTimeout(fit, 50);
+
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

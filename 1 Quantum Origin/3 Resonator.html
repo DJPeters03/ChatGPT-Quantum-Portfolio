@@ -1,0 +1,603 @@
+<!-- 01_resonator_inside_outside_energy.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Origin of Quantum 01 — Resonator: Same Frequency, Different Energy Inside/Outside</title>
+  <style>
+    :root{ color-scheme: dark; }
+    body{
+      margin:0; background:#0b0f14; color:#e8eef6;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .wrap{ width:min(1200px, 96vw); margin:16px auto; display:grid; gap:12px; }
+    .card{
+      background:#0f1622; border:1px solid rgba(255,255,255,.10);
+      border-radius:14px; padding:12px 12px 14px;
+      box-shadow: 0 10px 28px rgba(0,0,0,.28);
+    }
+    h1{ font-size:18px; margin:0 0 6px; }
+    .sub{ opacity:.85; font-size:13px; line-height:1.35; }
+    .grid{ display:grid; gap:12px; grid-template-columns: 1.2fr .8fr; align-items:start; }
+    @media (max-width: 980px){ .grid{ grid-template-columns: 1fr; } }
+    canvas{ width:100%; height:auto; display:block; border-radius:12px; background:#0b0f14; border:1px solid rgba(255,255,255,.08); }
+    .controls{ display:grid; gap:10px; }
+    .row{ display:grid; gap:6px; }
+    label{ font-size:12px; opacity:.9; display:flex; justify-content:space-between; gap:10px; }
+    input[type="range"]{ width:100%; }
+    .pill{
+      display:inline-block; padding:4px 10px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.06);
+      font-size:12px; opacity:.95; white-space:nowrap;
+    }
+    .btns{ display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+    button{
+      background:#152235; color:#e8eef6;
+      border:1px solid rgba(255,255,255,.14);
+      border-radius:10px; padding:9px 10px;
+      cursor:pointer;
+    }
+    button:hover{ filter:brightness(1.08); }
+    .mini{
+      font-size:12px; opacity:.85; line-height:1.45;
+      border-top:1px solid rgba(255,255,255,.08);
+      padding-top:10px; margin-top:8px;
+    }
+    .math{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size:12px; opacity:.95;
+      background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.10);
+      padding:10px; border-radius:12px;
+      overflow:auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Origin of Quantum — 01: Resonator (Same Frequency) → Outside Emission (Different Energy)</h1>
+      <div class="sub">
+        <b>Key claim this demo makes obvious:</b>
+        <span class="pill">f<sub>inside</sub> = f<sub>outside</sub></span>
+        but
+        <span class="pill">E<sub>inside</sub> ∝ A<sub>inside</sub>²</span>
+        and
+        <span class="pill">E<sub>outside</sub> ∝ A<sub>outside</sub>²</span>
+        are different.
+        <br/>
+        The outside isn’t a different frequency — it’s the <b>same oscillation</b> with <b>less amplitude</b> (less energy density),
+        plus explicit <b>energy pulses</b> emitted from the boundary.
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <canvas id="cv" width="1100" height="680"></canvas>
+      </div>
+
+      <div class="card">
+        <div class="controls">
+          <div class="row">
+            <label>
+              <span>Shared frequency f (Hz) — applies to BOTH inside and outside</span>
+              <span id="freqOut" class="pill">2.00</span>
+            </label>
+            <input id="freq" type="range" min="0.5" max="6" step="0.01" value="2.0" />
+          </div>
+
+          <div class="row">
+            <label>
+              <span>Inside amplitude Aᵢ (stored energy)</span>
+              <span id="AiOut" class="pill">1.20</span>
+            </label>
+            <input id="Ai" type="range" min="0.1" max="2.5" step="0.01" value="1.2" />
+          </div>
+
+          <div class="row">
+            <label>
+              <span>Outside amplitude Aₒ (emitted field energy)</span>
+              <span id="AoOut" class="pill">0.45</span>
+            </label>
+            <input id="Ao" type="range" min="0.02" max="2.5" step="0.01" value="0.45" />
+          </div>
+
+          <div class="row">
+            <label>
+              <span>Emission strength (pulse intensity)</span>
+              <span id="emitOut" class="pill">0.55</span>
+            </label>
+            <input id="emit" type="range" min="0" max="1.5" step="0.01" value="0.55" />
+          </div>
+
+          <div class="row">
+            <label>
+              <span>Time speed</span>
+              <span id="speedOut" class="pill">1.00×</span>
+            </label>
+            <input id="speed" type="range" min="0" max="3" step="0.01" value="1.00" />
+          </div>
+
+          <div class="btns">
+            <button id="toggle">Pause</button>
+            <button id="reset">Reset</button>
+            <button id="snap">Explain Snapshot</button>
+          </div>
+
+          <div class="math" id="snapshot">
+            <b>What is “energy emission” here?</b><br/>
+            This is a cartoon oscillator model:
+            <br/>• The boundary oscillates at the <b>same frequency f</b>.
+            <br/>• Outside field is the <b>same f</b>, but smaller amplitude → smaller energy.
+            <br/>• Pulses show <b>energy packets leaving</b> when boundary motion is large.
+          </div>
+
+          <div class="mini">
+            <b>What to write under this demo</b><br/>
+            1) A resonator can enforce a preferred oscillation rate (frequency).<br/>
+            2) Energy depends on <b>how big</b> the oscillation is (amplitude), not just how fast it oscillates.<br/>
+            3) Emission: energy can leave the resonator into the environment while keeping the same base frequency.<br/>
+            4) History tie-in: early radiation models treated matter as oscillators exchanging energy with fields.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+
+  const ui = {
+    freq: document.getElementById('freq'),
+    Ai: document.getElementById('Ai'),
+    Ao: document.getElementById('Ao'),
+    emit: document.getElementById('emit'),
+    speed: document.getElementById('speed'),
+    freqOut: document.getElementById('freqOut'),
+    AiOut: document.getElementById('AiOut'),
+    AoOut: document.getElementById('AoOut'),
+    emitOut: document.getElementById('emitOut'),
+    speedOut: document.getElementById('speedOut'),
+    toggle: document.getElementById('toggle'),
+    reset: document.getElementById('reset'),
+    snap: document.getElementById('snap'),
+    snapshot: document.getElementById('snapshot'),
+  };
+
+  const state = {
+    t: 0,
+    paused: false,
+    lastNow: performance.now(),
+    pulses: [], // emitted “energy packets”
+    note: ""
+  };
+
+  function clamp(x,a,b){ return Math.max(a, Math.min(b,x)); }
+  function fmt(x, n=2){ return (+x).toFixed(n); }
+
+  function drawRoundedRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y, x+w,y+h, r);
+    ctx.arcTo(x+w,y+h, x,y+h, r);
+    ctx.arcTo(x,y+h, x,y, r);
+    ctx.arcTo(x,y, x+w,y, r);
+    ctx.closePath();
+  }
+
+  function text(x,y,s, size=13, alpha=1){
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = `${size}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+    ctx.fillStyle = '#e8eef6';
+    ctx.fillText(s,x,y);
+    ctx.restore();
+  }
+  function mono(x,y,s, size=12, alpha=0.95){
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = `${size}px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`;
+    ctx.fillStyle = '#e8eef6';
+    ctx.fillText(s,x,y);
+    ctx.restore();
+  }
+
+  // IMPORTANT: One shared oscillator drives BOTH regions.
+  // This makes "same frequency" explicit: same omega, same phase, always.
+  function sharedOscillator(t, f){
+    const omega = 2*Math.PI*f;
+    return Math.sin(omega*t); // phase signal
+  }
+
+  // Inside: standing-ish pattern * shared oscillator
+  function insideField(xNorm, osc, Ai, modeN){
+    const k = modeN*Math.PI;
+    return Ai * osc * Math.sin(k*xNorm);
+  }
+
+  // Outside: same osc (same f), but smaller amplitude and a spatial envelope
+  function outsideField(xNorm, osc, Ao){
+    const env = Math.exp(-2.3*xNorm);
+    return Ao * osc * env;
+  }
+
+  function spawnPulse(intensity){
+    // Pulse starts at boundary and moves outward
+    state.pulses.push({
+      x: 0,           // outward position (0 at boundary)
+      life: 1.0,      // fades out
+      amp: intensity  // energy packet intensity
+    });
+  }
+
+  function updatePulses(dt, speed){
+    const v = 0.65 * speed; // outward speed
+    for(const p of state.pulses){
+      p.x += v*dt;
+      p.life -= 0.55*dt;
+    }
+    state.pulses = state.pulses.filter(p => p.life > 0 && p.x < 1.2);
+  }
+
+  function draw(){
+    const w = cv.width, h = cv.height;
+    ctx.clearRect(0,0,w,h);
+
+    // subtle radial glow
+    const grad = ctx.createRadialGradient(w*0.45,h*0.25, 40, w*0.45,h*0.25, Math.max(w,h)*0.9);
+    grad.addColorStop(0,'rgba(120,170,255,0.10)');
+    grad.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,w,h);
+
+    const pad = 22;
+    const top = 82;
+    const plotH = 230;
+
+    const cavity = { x: pad, y: top, w: w*0.58 - pad*1.2, h: plotH };
+    const outside = { x: cavity.x + cavity.w + 18, y: top, w: w - (cavity.x + cavity.w + 18) - pad, h: plotH };
+
+    const energyBox = { x: pad, y: top + plotH + 22, w: w - pad*2, h: 150 };
+    const emissionBox = { x: pad, y: energyBox.y + energyBox.h + 18, w: w - pad*2, h: h - (energyBox.y + energyBox.h + 18) - pad };
+
+    // Header
+    text(pad, 34, "Same frequency, different energy + explicit emission", 16, 0.98);
+    text(pad, 54, "The phase cursor moves together in both plots → f_inside = f_outside.", 12, 0.82);
+
+    // Boxes
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+
+    for(const r of [cavity, outside, energyBox, emissionBox]){
+      drawRoundedRect(r.x, r.y, r.w, r.h, 14);
+      ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+
+    // Params
+    const f = parseFloat(ui.freq.value);
+    const Ai = parseFloat(ui.Ai.value);
+    const Ao = parseFloat(ui.Ao.value);
+    const emit = parseFloat(ui.emit.value);
+
+    const osc = sharedOscillator(state.t, f);     // SAME oscillator drives both
+    const omega = 2*Math.PI*f;
+    const phase01 = (omega*state.t) % (2*Math.PI); // phase marker (0..2π)
+    const phaseNorm = phase01 / (2*Math.PI);       // 0..1
+
+    // Titles show SAME f explicitly
+    text(cavity.x + 14, cavity.y + 22, `Inside resonator (f_inside = ${fmt(f,2)} Hz)`, 12, 0.92);
+    text(outside.x + 14, outside.y + 22, `Outside field (f_outside = ${fmt(f,2)} Hz)`, 12, 0.92);
+
+    function drawWaveRegion(region, sampleFn, phaseCursor){
+      const midY = region.y + region.h*0.62;
+      const leftX = region.x + 14;
+      const rightX = region.x + region.w - 14;
+      const usableW = rightX - leftX;
+
+      // axis line
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+      ctx.beginPath();
+      ctx.moveTo(leftX, midY);
+      ctx.lineTo(rightX, midY);
+      ctx.stroke();
+      ctx.restore();
+
+      // phase cursor line (the SAME in both regions)
+      const cursorX = leftX + phaseCursor * usableW;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,0.30)';
+      ctx.setLineDash([6,6]);
+      ctx.beginPath();
+      ctx.moveTo(cursorX, region.y + 34);
+      ctx.lineTo(cursorX, region.y + region.h - 14);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      // wave
+      ctx.save();
+      ctx.strokeStyle = 'rgba(210,235,255,0.92)';
+      ctx.lineWidth = 2;
+
+      ctx.beginPath();
+      const N = 420;
+      for(let i=0;i<=N;i++){
+        const x = i / N;
+        const yVal = sampleFn(x);
+        const px = leftX + x*usableW;
+        const py = midY - yVal * (region.h*0.30);
+        if(i===0) ctx.moveTo(px,py);
+        else ctx.lineTo(px,py);
+      }
+      ctx.stroke();
+      ctx.restore();
+
+      // fill
+      ctx.save();
+      ctx.globalAlpha = 0.08;
+      ctx.fillStyle = 'rgba(170,220,255,1)';
+      ctx.beginPath();
+      ctx.moveTo(leftX, midY);
+      for(let i=0;i<=N;i++){
+        const x = i / N;
+        const yVal = sampleFn(x);
+        const px = leftX + x*usableW;
+        const py = midY - yVal * (region.h*0.30);
+        ctx.lineTo(px,py);
+      }
+      ctx.lineTo(rightX, midY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    const modeN = 3;
+    drawWaveRegion(cavity, (xNorm) => insideField(xNorm, osc, Ai, modeN), phaseNorm);
+    drawWaveRegion(outside, (xNorm) => outsideField(xNorm, osc, Ao), phaseNorm);
+
+    // Energy bars (cartoon): explicitly label same f different E
+    text(energyBox.x + 14, energyBox.y + 22, "Energy (cartoon): SAME frequency, DIFFERENT energy because amplitudes differ", 12, 0.92);
+
+    const Ei = Ai*Ai;
+    const Eo = Ao*Ao;
+    const maxE = Math.max(Ei, Eo, 0.0001);
+
+    const barArea = { x: energyBox.x + 14, y: energyBox.y + 40, w: energyBox.w - 28, h: 92 };
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    drawRoundedRect(barArea.x, barArea.y, barArea.w, barArea.h, 12);
+    ctx.fill();
+    ctx.restore();
+
+    const barW = (barArea.w - 48) / 2;
+    const barH = barArea.h - 34;
+    const baseY = barArea.y + barArea.h - 18;
+
+    function bar(x, label, val, norm){
+      const height = clamp((val/norm)*barH, 0, barH);
+      ctx.save();
+      ctx.fillStyle = 'rgba(170,220,255,0.18)';
+      ctx.strokeStyle = 'rgba(210,235,255,0.55)';
+      ctx.lineWidth = 1;
+      drawRoundedRect(x, baseY - height, barW, height, 10);
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+
+      text(x, baseY + 14, label, 12, 0.85);
+      mono(x, baseY - height - 8, `E ~ ${fmt(val,3)}  (∝ A²)`, 12, 0.9);
+    }
+
+    bar(barArea.x + 18, `Inside: f=${fmt(f,2)}Hz, Aᵢ=${fmt(Ai,2)}`, Ei, maxE);
+    bar(barArea.x + 18 + barW + 30, `Outside: f=${fmt(f,2)}Hz, Aₒ=${fmt(Ao,2)}`, Eo, maxE);
+
+    // Emission panel: show boundary + pulses leaving
+    text(emissionBox.x + 14, emissionBox.y + 22, "Emission visualization: energy packets leaving the boundary (same frequency carrier)", 12, 0.92);
+
+    const ex = emissionBox.x + 14;
+    const ey = emissionBox.y + 40;
+    const ew = emissionBox.w - 28;
+    const eh = emissionBox.h - 54;
+
+    // boundary line
+    const boundaryX = ex + ew*0.20;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.beginPath();
+    ctx.moveTo(boundaryX, ey);
+    ctx.lineTo(boundaryX, ey+eh);
+    ctx.stroke();
+    ctx.restore();
+
+    // Label boundary
+    text(boundaryX - 70, ey + 18, "boundary", 12, 0.75);
+
+    // Inside “stored” glow intensity based on |osc| * Ai
+    const glow = clamp(Math.abs(osc)*Ai, 0, 2.5);
+    ctx.save();
+    ctx.globalAlpha = 0.12 + 0.18*(glow/2.5);
+    ctx.fillStyle = 'rgba(170,220,255,1)';
+    drawRoundedRect(ex, ey, boundaryX - ex - 10, eh, 12);
+    ctx.fill();
+    ctx.restore();
+    text(ex + 12, ey + 18, "INSIDE (stored)", 12, 0.78);
+
+    // Outside region (weaker carrier)
+    ctx.save();
+    ctx.globalAlpha = 0.07;
+    ctx.fillStyle = 'rgba(170,220,255,1)';
+    drawRoundedRect(boundaryX + 10, ey, ex + ew - (boundaryX + 10), eh, 12);
+    ctx.fill();
+    ctx.restore();
+    text(boundaryX + 22, ey + 18, "OUTSIDE (emitted)", 12, 0.78);
+
+    // Draw carrier wave on the emission panel (same frequency, smaller amplitude outside)
+    const midY = ey + eh*0.62;
+    const leftInside = ex + 10;
+    const rightEdge = ex + ew - 10;
+
+    // axis
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+    ctx.beginPath();
+    ctx.moveTo(leftInside, midY);
+    ctx.lineTo(rightEdge, midY);
+    ctx.stroke();
+    ctx.restore();
+
+    // carrier lines: inside amplitude bigger, outside amplitude smaller — SAME phase/oscillation
+    function carrierAmpAt(x){
+      // blend from inside -> outside at boundary
+      if (x < boundaryX) return Ai;
+      return Ao;
+    }
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(210,235,255,0.90)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const N = 500;
+    for(let i=0;i<=N;i++){
+      const px = leftInside + (i/N)*(rightEdge-leftInside);
+      const xNorm = (px - leftInside) / (rightEdge - leftInside); // 0..1
+      const amp = carrierAmpAt(px);
+      const env = (px < boundaryX) ? 1.0 : Math.exp(-1.7*(xNorm-0.2)); // decay outside
+      const yVal = amp * osc * env;
+      const py = midY - yVal * (eh*0.18);
+      if(i===0) ctx.moveTo(px,py);
+      else ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // Pulses: energy packets leaving boundary
+    for(const p of state.pulses){
+      const px = boundaryX + 12 + p.x * (ew*0.75);
+      const py = midY - (osc * 0.0) * (eh*0.0);
+      const radius = 10 + 18*(p.amp/1.5);
+      ctx.save();
+      ctx.globalAlpha = clamp(0.14 * p.life * (0.6 + 0.7*(p.amp/1.5)), 0, 0.22);
+      ctx.fillStyle = 'rgba(170,220,255,1)';
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      ctx.globalAlpha = clamp(0.28 * p.life, 0, 0.35);
+      ctx.strokeStyle = 'rgba(210,235,255,1)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Explicit “same frequency” stamp
+    const stamp = `f_inside = f_outside = ${fmt(f,2)} Hz  (phase locked)`;
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    drawRoundedRect(emissionBox.x + 14, emissionBox.y + emissionBox.h - 36, ctx.measureText(stamp).width + 26, 24, 10);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+    mono(emissionBox.x + 26, emissionBox.y + emissionBox.h - 19, stamp, 12, 0.95);
+
+    // Optional note
+    if(state.note){
+      mono(emissionBox.x + 14, emissionBox.y + 40, state.note, 12, 0.9);
+    }
+  }
+
+  function step(now){
+    const dt = Math.min(0.05, (now - state.lastNow) / 1000);
+    state.lastNow = now;
+
+    const speed = parseFloat(ui.speed.value);
+
+    if(!state.paused){
+      state.t += dt * speed;
+
+      // Emission trigger: when |osc| is large, emit pulses proportional to inside energy
+      const f = parseFloat(ui.freq.value);
+      const Ai = parseFloat(ui.Ai.value);
+      const emit = parseFloat(ui.emit.value);
+      const osc = sharedOscillator(state.t, f);
+
+      // thresholded emission rate (cartoon)
+      const drive = Math.abs(osc);
+      if (drive > 0.86) {
+        const intensity = clamp(emit * Ai * (drive - 0.86) * 6.0, 0, 1.5);
+        // spawn a few small pulses instead of one huge blob
+        if (Math.random() < 0.35) spawnPulse(intensity);
+      }
+
+      updatePulses(dt, speed);
+    }
+
+    // UI readouts
+    ui.freqOut.textContent = fmt(ui.freq.value, 2);
+    ui.AiOut.textContent = fmt(ui.Ai.value, 2);
+    ui.AoOut.textContent = fmt(ui.Ao.value, 2);
+    ui.emitOut.textContent = fmt(ui.emit.value, 2);
+    ui.speedOut.textContent = fmt(ui.speed.value, 2) + "×";
+
+    draw();
+    requestAnimationFrame(step);
+  }
+
+  function reset(){
+    ui.freq.value = "2.0";
+    ui.Ai.value = "1.2";
+    ui.Ao.value = "0.45";
+    ui.emit.value = "0.55";
+    ui.speed.value = "1.00";
+
+    state.t = 0;
+    state.pulses = [];
+    state.note = "";
+    ui.snapshot.innerHTML = `
+      <b>Explicit statement:</b><br/>
+      • The outside uses the <b>same oscillator</b> as the inside (same phase, same frequency).<br/>
+      • Energy differs because amplitude differs: <b>E ∝ A²</b>.<br/>
+      • Pulses are a cartoon “emission” — packets leaving the boundary when motion is large.
+    `;
+  }
+
+  ui.toggle.addEventListener('click', () => {
+    state.paused = !state.paused;
+    ui.toggle.textContent = state.paused ? "Run" : "Pause";
+  });
+
+  ui.reset.addEventListener('click', reset);
+
+  ui.snap.addEventListener('click', () => {
+    const f = parseFloat(ui.freq.value);
+    const Ai = parseFloat(ui.Ai.value);
+    const Ao = parseFloat(ui.Ao.value);
+    const Ei = Ai*Ai, Eo = Ao*Ao;
+
+    state.note = `Snapshot: SAME f=${fmt(f,2)}Hz, but E_inside~${fmt(Ei,3)} vs E_outside~${fmt(Eo,3)} (because A differs).`;
+
+    ui.snapshot.innerHTML = `
+      <b>Snapshot explanation</b><br/>
+      SAME frequency in both regions: <b>f_inside = f_outside = ${fmt(f,2)} Hz</b> (phase locked).<br/>
+      Different energies because amplitudes differ:<br/>
+      • Inside: Aᵢ=${fmt(Ai,2)} → Eᵢ∝Aᵢ²=${fmt(Ei,3)}<br/>
+      • Outside: Aₒ=${fmt(Ao,2)} → Eₒ∝Aₒ²=${fmt(Eo,3)}<br/>
+      Emission pulses show energy leaving while the carrier oscillation rate stays the same.
+    `;
+  });
+
+  // Start
+  reset();
+  requestAnimationFrame((t)=>{ state.lastNow = t; requestAnimationFrame(step); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Quantum Error-Correcting “Janitors” — Stabilizer Parity Checks vs Decoherence</title>
+  <style>
+    :root{ color-scheme: dark; }
+    body{
+      margin:0; background:#0b0f14; color:#e8eef6;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .wrap{ width:min(1200px, 96vw); margin:14px auto; display:grid; gap:12px; }
+    .card{
+      background:#0f1622; border:1px solid rgba(255,255,255,.10);
+      border-radius:14px; padding:12px 12px 14px;
+      box-shadow: 0 10px 26px rgba(0,0,0,.28);
+    }
+    h1{ margin:0 0 6px; font-size:18px; }
+    .sub{ opacity:.85; font-size:13px; line-height:1.35; }
+    canvas{
+      width:100%; height:520px; display:block;
+      background: radial-gradient(1200px 520px at 70% 30%, rgba(255,255,255,.06), transparent 60%),
+                  linear-gradient(180deg, rgba(255,255,255,.02), transparent);
+      border-radius:12px; border:1px solid rgba(255,255,255,.08);
+    }
+    .grid{ display:grid; grid-template-columns: 1.4fr 1fr; gap:12px; }
+    .controls{ display:grid; gap:10px; }
+    .row{ display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center; }
+    label{ font-size:12px; opacity:.9; }
+    input[type="range"]{ width:100%; }
+    .btns{ display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+    button{
+      background:#162235; color:#e8eef6; border:1px solid rgba(255,255,255,.12);
+      padding:8px 10px; border-radius:10px; cursor:pointer;
+      font-weight:600; font-size:13px;
+    }
+    button:hover{ filter:brightness(1.08); }
+    button:active{ transform: translateY(1px); }
+    .pill{
+      display:inline-flex; gap:8px; align-items:center;
+      border:1px solid rgba(255,255,255,.10); background: rgba(255,255,255,.04);
+      padding:6px 10px; border-radius:999px; font-size:12px; opacity:.92;
+    }
+    .stats{
+      display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; margin-top:8px;
+    }
+    .stat{
+      border:1px solid rgba(255,255,255,.10); border-radius:12px;
+      padding:8px 10px; background: rgba(255,255,255,.03);
+    }
+    .stat .k{ font-size:12px; opacity:.8; }
+    .stat .v{ font-size:16px; font-weight:800; margin-top:2px; }
+    .log{
+      height:250px; overflow:auto; padding:10px;
+      border:1px solid rgba(255,255,255,.10); border-radius:12px;
+      background: rgba(0,0,0,.22); font-size:12px; line-height:1.35;
+    }
+    .log .t{ opacity:.85; }
+    .log .good{ color:#a7ffcf; }
+    .log .warn{ color:#ffd48a; }
+    .log .bad{ color:#ff9aa8; }
+    .foot{
+      display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+      margin-top:10px; opacity:.85; font-size:12px;
+    }
+    .toggle{
+      display:flex; align-items:center; gap:8px;
+      padding:6px 10px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.10); background: rgba(255,255,255,.04);
+      user-select:none;
+    }
+    .toggle input{ transform: translateY(1px); }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Quantum Error-Correcting “Janitors”</h1>
+      <div class="sub">
+        Decoherence (random <span class="mono">X</span>-flips) constantly attacks <b>data qubits</b>. Janitor agents can’t “look at” data directly (that would be a destructive measurement),
+        so they only perform <b>stabilizer parity checks</b> on <b>check qubits</b> to obtain a <b>syndrome</b>—then apply corrections without reading the data.
+        <br/><span class="mono">Model:</span> 1D repetition-style code with <span class="mono">ZZ</span> parity checks that detect <span class="mono">X</span> errors.
+      </div>
+    </div>
+
+    <div class="card">
+      <canvas id="c"></canvas>
+      <div class="foot">
+        <span class="pill">Data qubits = circles (unknown state)</span>
+        <span class="pill">Check qubits = squares (syndrome 0/1)</span>
+        <span class="pill">Janitors = moving dots</span>
+        <label class="toggle" title="Shows the hidden classical error flags (educational cheat).">
+          <input id="peek" type="checkbox" />
+          Peek hidden errors (cheat)
+        </label>
+        <label class="toggle" title="Adds occasional correlated errors (a tiny taste of more realistic noise).">
+          <input id="corr" type="checkbox" checked />
+          Correlated noise
+        </label>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card controls">
+        <div class="row">
+          <label>Noise rate (X-flips / second)</label>
+          <div class="pill"><span id="noiseVal" class="mono">0.60</span></div>
+        </div>
+        <input id="noise" type="range" min="0" max="3" step="0.01" value="0.60" />
+
+        <div class="row">
+          <label>Parity-check interval (seconds)</label>
+          <div class="pill"><span id="measVal" class="mono">0.90</span></div>
+        </div>
+        <input id="meas" type="range" min="0.15" max="2.5" step="0.01" value="0.90" />
+
+        <div class="row">
+          <label>Janitor speed</label>
+          <div class="pill"><span id="speedVal" class="mono">1.15</span></div>
+        </div>
+        <input id="speed" type="range" min="0.2" max="3.0" step="0.01" value="1.15" />
+
+        <div class="row">
+          <label>Janitor count</label>
+          <div class="pill"><span id="janVal" class="mono">2</span></div>
+        </div>
+        <input id="jans" type="range" min="1" max="5" step="1" value="2" />
+
+        <div class="btns">
+          <button id="toggleRun">Pause</button>
+          <button id="step">Step (single tick)</button>
+          <button id="reset">Reset</button>
+          <button id="scramble">Scramble (inject errors)</button>
+        </div>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="k">Hidden X-errors</div>
+            <div class="v mono" id="errCount">0</div>
+          </div>
+          <div class="stat">
+            <div class="k">Syndrome (checks)</div>
+            <div class="v mono" id="synStr">0000</div>
+          </div>
+          <div class="stat">
+            <div class="k">“Logical health”</div>
+            <div class="v mono" id="health">100%</div>
+          </div>
+        </div>
+
+        <div class="sub" style="margin-top:8px;">
+          <b>What you’re learning:</b><br/>
+          • Data is “protected” by redundancy; you never read data qubits directly.<br/>
+          • Check qubits reveal only <i>parity</i> (syndrome), not the data itself.<br/>
+          • Janitors do decoding: they guess where errors are from syndrome patterns.
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <div>
+            <div style="font-weight:800;">Event Log</div>
+            <div class="sub">Noise events, parity checks, and corrections (no direct data measurement).</div>
+          </div>
+          <button id="clearLog">Clear</button>
+        </div>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ---------- Helpers ----------
+  const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
+  const lerp = (a,b,t)=>a+(b-a)*t;
+  const rnd = (a=1)=>Math.random()*a;
+  const choice = (arr)=>arr[(Math.random()*arr.length)|0];
+
+  function nowMs(){ return performance.now(); }
+  function fmt(n, d=2){ return (+n).toFixed(d); }
+
+  // ---------- Canvas setup ----------
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  function fitCanvas(){
+    const cssW = canvas.clientWidth;
+    const cssH = canvas.clientHeight;
+    const dpr = Math.max(1, Math.min(2, devicePixelRatio || 1));
+    canvas.width = Math.floor(cssW * dpr);
+    canvas.height = Math.floor(cssH * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  addEventListener('resize', fitCanvas, {passive:true});
+  fitCanvas();
+
+  // ---------- UI ----------
+  const ui = {
+    noise: document.getElementById('noise'),
+    meas: document.getElementById('meas'),
+    speed: document.getElementById('speed'),
+    jans: document.getElementById('jans'),
+    noiseVal: document.getElementById('noiseVal'),
+    measVal: document.getElementById('measVal'),
+    speedVal: document.getElementById('speedVal'),
+    janVal: document.getElementById('janVal'),
+    errCount: document.getElementById('errCount'),
+    synStr: document.getElementById('synStr'),
+    health: document.getElementById('health'),
+    log: document.getElementById('log'),
+    toggleRun: document.getElementById('toggleRun'),
+    step: document.getElementById('step'),
+    reset: document.getElementById('reset'),
+    scramble: document.getElementById('scramble'),
+    clearLog: document.getElementById('clearLog'),
+    peek: document.getElementById('peek'),
+    corr: document.getElementById('corr'),
+  };
+
+  function syncLabels(){
+    ui.noiseVal.textContent = fmt(ui.noise.value, 2);
+    ui.measVal.textContent  = fmt(ui.meas.value, 2);
+    ui.speedVal.textContent = fmt(ui.speed.value, 2);
+    ui.janVal.textContent   = String(ui.jans.value|0);
+  }
+  ['input','change'].forEach(ev=>{
+    ui.noise.addEventListener(ev, syncLabels);
+    ui.meas.addEventListener(ev, syncLabels);
+    ui.speed.addEventListener(ev, syncLabels);
+    ui.jans.addEventListener(ev, () => { syncLabels(); rebuildJanitors(); });
+  });
+  syncLabels();
+
+  function logLine(html){
+    const el = document.createElement('div');
+    el.innerHTML = html;
+    ui.log.appendChild(el);
+    ui.log.scrollTop = ui.log.scrollHeight;
+  }
+  ui.clearLog.onclick = () => ui.log.innerHTML = '';
+
+  // ---------- Quantum-ish model (educational, simplified) ----------
+  //
+  // We track hidden "X error flags" e[i] on N data qubits.
+  // Stabilizer checks are between neighbors: s[j] = e[j] XOR e[j+1].
+  //
+  // This mimics measuring ZZ stabilizers (parity) to detect X flips
+  // WITHOUT measuring the data qubits themselves.
+  //
+  // Decoder/correction is simplified (greedy). In real QEC, decoding can be
+  // Minimum-Weight Perfect Matching, belief propagation, etc.
+
+  const N = 5;           // data qubits
+  const M = N - 1;       // check qubits between them
+  let e = new Array(N).fill(0);      // hidden X-error flags
+  let s = new Array(M).fill(0);      // latest syndrome measurement
+  let sAge = 999;                    // time since last measurement
+  let tSinceMeas = 0;
+
+  function syndromeFromErrors(){
+    for(let j=0;j<M;j++){
+      s[j] = (e[j] ^ e[j+1]) ? 1 : 0;
+    }
+  }
+
+  function errorCount(){
+    let c=0; for(const v of e) c += v?1:0;
+    return c;
+  }
+
+  // A toy "logical health": ideal encoded state is "all consistent" (no errors).
+  // We'll map health to exp(-k * errors) just as a friendly meter.
+  function healthScore(){
+    const c = errorCount();
+    const k = 0.7;
+    const val = Math.exp(-k*c);
+    return clamp(val, 0, 1);
+  }
+
+  // ---------- Geometry ----------
+  function layout(){
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+
+    const centerY = h * 0.56;
+    const left = w * 0.10;
+    const right = w * 0.90;
+    const span = right - left;
+
+    const dataPos = [];
+    for(let i=0;i<N;i++){
+      const x = left + span * (i/(N-1));
+      dataPos.push({x, y:centerY});
+    }
+
+    const checkPos = [];
+    for(let j=0;j<M;j++){
+      const x = (dataPos[j].x + dataPos[j+1].x)/2;
+      const y = centerY - h*0.18;
+      checkPos.push({x, y});
+    }
+
+    // "Circuit frame" corners for visuals
+    return { w, h, left, right, centerY, dataPos, checkPos };
+  }
+
+  // ---------- Janitors ----------
+  let janitors = [];
+  function rebuildJanitors(){
+    const count = ui.jans.value|0;
+    janitors = [];
+    for(let k=0;k<count;k++){
+      janitors.push({
+        id:k,
+        // Each janitor moves along check nodes (0..M-1) in a loop.
+        target: k % M,
+        x: 0, y: 0,
+        phase: rnd(1),
+        carrying: null, // planned correction {type:'X', idx}
+        busy: 0,
+      });
+    }
+  }
+  rebuildJanitors();
+
+  // ---------- Noise process ----------
+  // Interpret "noise rate" as a Poisson process: expected flips per second.
+  // We'll apply flips with probability p = 1 - exp(-rate*dt).
+  function applyNoise(dt){
+    const rate = +ui.noise.value; // flips per second
+    if(rate <= 0) return;
+
+    const p = 1 - Math.exp(-rate * dt);
+    if(Math.random() < p){
+      // single-qubit flip
+      const i = (Math.random()*N)|0;
+      e[i] ^= 1;
+
+      // optional correlated "burst": sometimes flip neighbor too
+      if(ui.corr.checked && Math.random() < 0.22){
+        const j = clamp(i + choice([-1, +1]), 0, N-1);
+        if(j !== i) e[j] ^= 1;
+        logLine(`<span class="t">Noise:</span> <span class="bad">correlated X-flip</span> hit data q${i} and q${j}.`);
+      } else {
+        logLine(`<span class="t">Noise:</span> <span class="bad">X-flip</span> hit data q${i}.`);
+      }
+    }
+  }
+
+  // ---------- Parity checks (stabilizer measurement) ----------
+  function performParityChecks(){
+    syndromeFromErrors();
+    sAge = 0;
+    const syn = s.map(v=>v?1:0).join('');
+    logLine(`<span class="t">Parity check:</span> syndrome = <span class="warn mono">${syn}</span> (checks read parity, not data).`);
+  }
+
+  // ---------- Decoder (toy) ----------
+  // Goal: pick a data qubit index to flip (apply X) based on syndrome pattern.
+  //
+  // For single errors in a line code:
+  // - If s[0]=1 only -> error at q0 (or q1, ambiguity in general; but with boundaries, we bias)
+  // - If s[j-1]=1 and s[j]=1 -> error at qj
+  // - If s[M-1]=1 only -> error at q(N-1)
+  //
+  // We'll do a greedy heuristic that tries to explain syndrome with minimal flips.
+  function proposeCorrectionsFromSyndrome(){
+    // Copy syndrome
+    const syn = s.slice();
+    const flips = [];
+
+    // Helper to "apply" a flip to syn space:
+    // Flipping data qubit i toggles adjacent syndromes i-1 and i (where defined).
+    const toggleAdj = (i) => {
+      if(i-1 >= 0) syn[i-1] ^= 1;
+      if(i < M) syn[i] ^= 1;
+    };
+
+    // Greedy: while syndrome has 1s, pick a qubit to reduce them.
+    let guard = 0;
+    while(syn.some(v=>v===1) && guard++ < 20){
+      // find first 1
+      const j = syn.findIndex(v=>v===1);
+
+      // Try patterns:
+      // If j==0, flip q0 (clears syn[0]) or q1 (also clears syn[0] but affects syn[1])
+      // We'll choose q0 if syn[1]==0 else q1.
+      let iPick;
+      if(j === 0){
+        iPick = syn[1] ? 1 : 0;
+      } else if(j === M-1){
+        // last check: choose last qubit if left neighbor 0 else second-last
+        iPick = syn[M-2] ? (N-2) : (N-1);
+      } else {
+        // middle: if syn[j-1]==1 and syn[j]==1, flip qj
+        if(syn[j-1] && syn[j]) iPick = j;
+        else {
+          // otherwise choose whichever reduces more 1s
+          const candA = j;     // flip qj affects syn[j-1], syn[j]
+          const candB = j+1;   // flip q(j+1) affects syn[j], syn[j+1]
+          const score = (cand) => {
+            const before = syn.reduce((a,b)=>a+b,0);
+            // simulate
+            let tmp = syn.slice();
+            if(cand-1>=0) tmp[cand-1]^=1;
+            if(cand<M) tmp[cand]^=1;
+            const after = tmp.reduce((a,b)=>a+b,0);
+            return before - after; // improvement
+          };
+          iPick = (score(candB) > score(candA)) ? candB : candA;
+          iPick = clamp(iPick, 0, N-1);
+        }
+      }
+
+      flips.push(iPick);
+      toggleAdj(iPick);
+    }
+
+    // unique-ify flips mod 2 (two flips cancel)
+    const parity = new Array(N).fill(0);
+    for(const f of flips) parity[f] ^= 1;
+    const uniqueFlips = [];
+    for(let i=0;i<N;i++) if(parity[i]) uniqueFlips.push(i);
+
+    return uniqueFlips;
+  }
+
+  function applyCorrection(i){
+    e[i] ^= 1;
+    logLine(`<span class="t">Correction:</span> janitor applied <span class="good">X</span> on data q${i} (guided by syndrome).`);
+  }
+
+  // ---------- Simulation loop ----------
+  let running = true;
+  let last = nowMs();
+  let accumStep = 0; // for "Step (single tick)" button
+
+  ui.toggleRun.onclick = () => {
+    running = !running;
+    ui.toggleRun.textContent = running ? 'Pause' : 'Resume';
+  };
+
+  ui.step.onclick = () => {
+    // perform a fixed small tick even if paused
+    if(running) return;
+    accumStep += 1;
+  };
+
+  ui.reset.onclick = () => {
+    e.fill(0);
+    s.fill(0);
+    sAge = 999;
+    tSinceMeas = 0;
+    logLine(`<span class="t">Reset:</span> state cleared (no errors).`);
+  };
+
+  ui.scramble.onclick = () => {
+    const k = 1 + ((Math.random()*3)|0);
+    for(let t=0;t<k;t++){
+      const i = (Math.random()*N)|0;
+      e[i] ^= 1;
+    }
+    logLine(`<span class="t">Scramble:</span> injected <span class="bad">${k}</span> random X-errors (hidden).`);
+  };
+
+  function tick(dt){
+    // 1) Noise flips happen continuously
+    applyNoise(dt);
+
+    // 2) Parity checks happen at an interval (measuring check qubits)
+    const measInterval = +ui.meas.value;
+    tSinceMeas += dt;
+    sAge += dt;
+    if(tSinceMeas >= measInterval){
+      tSinceMeas = 0;
+      performParityChecks();
+
+      // 3) Assign janitors new jobs from syndrome (if any)
+      const flips = proposeCorrectionsFromSyndrome();
+      if(flips.length){
+        // distribute planned corrections among janitors
+        for(const j of janitors) j.carrying = null;
+        let idx = 0;
+        for(const q of flips){
+          janitors[idx % janitors.length].carrying = { type:'X', idx:q };
+          idx++;
+        }
+        logLine(`<span class="t">Decode:</span> proposed fixes → <span class="warn mono">[${flips.map(x=>'q'+x).join(', ')}]</span> distributed to janitors.`);
+      } else {
+        logLine(`<span class="t">Decode:</span> no correction needed (syndrome all zeros).`);
+        for(const j of janitors) j.carrying = null;
+      }
+    }
+
+    // 4) Janitors move along the circuit to checks, then to data to apply fixes
+    const L = layout();
+    const speed = +ui.speed.value;
+
+    for(const j of janitors){
+      j.phase = (j.phase + dt * 0.25 * speed) % 1;
+
+      // Movement path:
+      // - they orbit around the check nodes in a loop (visually),
+      // - and if they have a correction, they "dive" down to target data qubit and apply.
+      const cp = L.checkPos[j.target];
+      const wob = 10 + 6*j.id;
+
+      // base orbit around check node
+      const ang = (j.phase * Math.PI*2) + j.id;
+      let x = cp.x + Math.cos(ang)*wob;
+      let y = cp.y + Math.sin(ang)*wob;
+
+      // If carrying a correction, interpolate position toward that data qubit periodically
+      if(j.carrying){
+        const dp = L.dataPos[j.carrying.idx];
+        const dive = 0.5 + 0.5*Math.sin((j.phase*2)*Math.PI); // 0..1
+        const t = clamp(dive*dive, 0, 1); // emphasize extremes
+        x = lerp(x, dp.x, 0.72*t);
+        y = lerp(y, dp.y, 0.72*t);
+
+        // Apply correction when close enough (and not too frequently)
+        const dx = x - dp.x, dy = y - dp.y;
+        const dist = Math.hypot(dx,dy);
+        if(dist < 12 && j.busy <= 0){
+          applyCorrection(j.carrying.idx);
+          j.busy = 0.35; // cooldown
+          j.carrying = null;
+        }
+      }
+
+      j.busy -= dt;
+      j.x = x; j.y = y;
+
+      // Update target check node occasionally, so janitors patrol
+      if(Math.random() < dt * 0.18 * speed){
+        j.target = (j.target + (Math.random()<0.5 ? -1 : +1) + M) % M;
+      }
+    }
+
+    // Update UI stats
+    ui.errCount.textContent = String(errorCount());
+    ui.synStr.textContent = s.map(v=>v?1:0).join('');
+    ui.health.textContent = Math.round(healthScore()*100) + '%';
+  }
+
+  // ---------- Drawing ----------
+  function draw(){
+    const L = layout();
+    const w = L.w, h = L.h;
+
+    // Clear
+    ctx.clearRect(0,0,w,h);
+
+    // Background subtle grid
+    ctx.save();
+    ctx.globalAlpha = 0.10;
+    ctx.strokeStyle = '#cfe3ff';
+    ctx.lineWidth = 1;
+    const step = 34;
+    for(let x=0; x<w; x+=step){
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke();
+    }
+    for(let y=0; y<h; y+=step){
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
+    }
+    ctx.restore();
+
+    // Circuit wire
+    ctx.save();
+    ctx.strokeStyle = 'rgba(220,240,255,.55)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(L.dataPos[0].x, L.dataPos[0].y);
+    for(let i=1;i<N;i++) ctx.lineTo(L.dataPos[i].x, L.dataPos[i].y);
+    ctx.stroke();
+
+    // Check wire (ancilla line)
+    ctx.strokeStyle = 'rgba(220,240,255,.25)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(L.checkPos[0].x, L.checkPos[0].y);
+    for(let j=1;j<M;j++) ctx.lineTo(L.checkPos[j].x, L.checkPos[j].y);
+    ctx.stroke();
+
+    // Connectors between data and checks
+    ctx.strokeStyle = 'rgba(220,240,255,.18)';
+    ctx.lineWidth = 2;
+    for(let j=0;j<M;j++){
+      const a = L.dataPos[j], b = L.dataPos[j+1], c = L.checkPos[j];
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(c.x, c.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Title overlays
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,.90)';
+    ctx.font = '700 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+    ctx.fillText('Data qubits (do NOT measure directly)', 16, 22);
+    ctx.fillStyle = 'rgba(255,255,255,.75)';
+    ctx.font = '600 13px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+    ctx.fillText('Check qubits measure stabilizers (parity) → syndrome', 16, 44);
+    ctx.restore();
+
+    // Draw data qubits
+    for(let i=0;i<N;i++){
+      const p = L.dataPos[i];
+      const r = 28;
+
+      // "Quantum state" glow (unknown/superposition vibe)
+      const t = (performance.now()*0.001) + i*0.7;
+      const pulse = 0.5 + 0.5*Math.sin(t*1.7);
+      const grad = ctx.createRadialGradient(p.x-8,p.y-10, 6, p.x,p.y, r+16);
+      grad.addColorStop(0, `rgba(180,220,255,${0.18+0.12*pulse})`);
+      grad.addColorStop(1, `rgba(20,30,45,0.0)`);
+
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(p.x,p.y, r+18, 0, Math.PI*2); ctx.fill();
+
+      // Base circle
+      ctx.fillStyle = 'rgba(15,24,38,.95)';
+      ctx.strokeStyle = 'rgba(255,255,255,.16)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(p.x,p.y, r, 0, Math.PI*2);
+      ctx.fill(); ctx.stroke();
+
+      // Inner shimmer ring
+      ctx.strokeStyle = `rgba(200,240,255,${0.10+0.10*pulse})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(p.x,p.y, r-8, 0, Math.PI*2);
+      ctx.stroke();
+
+      // Label
+      ctx.fillStyle = 'rgba(255,255,255,.86)';
+      ctx.font = '700 12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`q${i}`, p.x, p.y - r - 10);
+
+      // Show "peek" hidden error flag
+      if(ui.peek.checked){
+        ctx.fillStyle = e[i] ? 'rgba(255,120,140,.95)' : 'rgba(140,255,200,.90)';
+        ctx.font = '800 14px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+        ctx.fillText(e[i] ? 'X' : '·', p.x, p.y + 5);
+        ctx.fillStyle = 'rgba(255,255,255,.70)';
+        ctx.font = '600 11px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+        ctx.fillText('(hidden)', p.x, p.y + 22);
+      } else {
+        // If not peeking, show a neutral "probability bar" look
+        const barW = 34, barH = 6;
+        const bx = p.x - barW/2, by = p.y + 16;
+        ctx.fillStyle = 'rgba(255,255,255,.10)';
+        ctx.fillRect(bx, by, barW, barH);
+
+        // animate pseudo-probability
+        const prob1 = 0.2 + 0.6*(0.5+0.5*Math.sin(t*1.2 + 1.3)); // 0.2..0.8
+        ctx.fillStyle = 'rgba(180,220,255,.45)';
+        ctx.fillRect(bx, by, barW*prob1, barH);
+
+        ctx.fillStyle = 'rgba(255,255,255,.55)';
+        ctx.font = '600 10px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+        ctx.fillText(`P(1)≈${Math.round(prob1*100)}%`, p.x, p.y + 40);
+      }
+
+      ctx.textAlign = 'left';
+    }
+
+    // Draw check qubits (syndrome)
+    for(let j=0;j<M;j++){
+      const p = L.checkPos[j];
+      const sz = 30;
+
+      const val = s[j] ? 1 : 0;
+      const age = clamp(sAge, 0, 2.0);
+      const freshness = Math.exp(-age*1.2);
+
+      // Glow depending on value and freshness
+      ctx.save();
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = val ? `rgba(255,210,120,${0.10+0.25*freshness})`
+                          : `rgba(140,255,200,${0.08+0.18*freshness})`;
+      ctx.beginPath();
+      ctx.roundRect(p.x - sz/2 - 12, p.y - sz/2 - 12, sz+24, sz+24, 10);
+      ctx.fill();
+      ctx.restore();
+
+      // Square
+      ctx.fillStyle = 'rgba(12,18,28,.95)';
+      ctx.strokeStyle = 'rgba(255,255,255,.16)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(p.x - sz/2, p.y - sz/2, sz, sz, 8);
+      ctx.fill(); ctx.stroke();
+
+      // Label
+      ctx.fillStyle = 'rgba(255,255,255,.80)';
+      ctx.font = '700 12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`s${j}`, p.x, p.y - sz/2 - 10);
+
+      // Value
+      ctx.fillStyle = val ? 'rgba(255,210,120,.98)' : 'rgba(140,255,200,.95)';
+      ctx.font = '900 16px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+      ctx.fillText(String(val), p.x, p.y + 6);
+
+      ctx.fillStyle = 'rgba(255,255,255,.60)';
+      ctx.font = '600 10px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      ctx.fillText(freshness > 0.65 ? 'fresh' : (freshness > 0.35 ? 'aging' : 'stale'), p.x, p.y + 22);
+      ctx.textAlign = 'left';
+    }
+
+    // Draw janitors
+    for(const j of janitors){
+      const r = 10;
+      // body
+      ctx.fillStyle = 'rgba(175,220,255,.95)';
+      ctx.strokeStyle = 'rgba(0,0,0,.35)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(j.x, j.y, r, 0, Math.PI*2);
+      ctx.fill(); ctx.stroke();
+
+      // visor
+      ctx.fillStyle = 'rgba(10,18,28,.85)';
+      ctx.beginPath(); ctx.arc(j.x+2, j.y-1, r*0.45, 0, Math.PI*2);
+      ctx.fill();
+
+      // badge for carrying correction
+      if(j.carrying){
+        ctx.fillStyle = 'rgba(255,210,120,.95)';
+        ctx.font = '900 12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('X', j.x, j.y + 4);
+      }
+
+      // id
+      ctx.fillStyle = 'rgba(255,255,255,.70)';
+      ctx.font = '700 10px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('J'+j.id, j.x, j.y + 22);
+      ctx.textAlign = 'left';
+    }
+
+    // Small legend at bottom
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,.70)';
+    ctx.font = '600 12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+    const syn = s.map(v=>v?1:0).join('');
+    ctx.fillText(`Syndrome = ${syn}   |   Noise flips happen continuously   |   Checks run every ${fmt(ui.meas.value,2)}s`, 16, h-16);
+    ctx.restore();
+  }
+
+  // ---------- Main loop ----------
+  function frame(){
+    const t = nowMs();
+    let dt = (t - last)/1000;
+    last = t;
+    dt = clamp(dt, 0, 0.05);
+
+    if(running){
+      tick(dt);
+    } else if(accumStep > 0){
+      // one deterministic small tick
+      accumStep--;
+      tick(0.05);
+    }
+
+    draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ---------- Initial log ----------
+  logLine(`<span class="t">Init:</span> Janitors online. Data qubits are <b>not directly measured</b>. Only parity checks update syndrome.`);
+  logLine(`<span class="t">Tip:</span> Toggle <span class="mono">Peek hidden errors</span> to see what the janitors are correcting (then turn it off again).`);
+
+})();
+</script>
+</body>
+</html>

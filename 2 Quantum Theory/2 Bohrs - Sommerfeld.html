@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Old Quantum Theory Visualizer — Action Integrals (Bohr–Sommerfeld)</title>
+  <style>
+    :root { color-scheme: dark; }
+    body{
+      margin:0; background:#0b0f14; color:#e8eef6;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .wrap{ width:min(1200px, 96vw); margin:14px auto; display:grid; gap:12px; }
+    .row{ display:grid; gap:12px; grid-template-columns: 1.2fr 0.8fr; }
+    @media (max-width: 980px){ .row{ grid-template-columns: 1fr; } }
+
+    .card{
+      background:#0f1622; border:1px solid rgba(255,255,255,.08);
+      border-radius:14px; padding:12px;
+      box-shadow: 0 10px 26px rgba(0,0,0,.25);
+    }
+    h1{ font-size:16px; margin:0 0 8px; font-weight:700; }
+    h2{ font-size:13px; margin:0 0 8px; opacity:.9; }
+    .muted{ opacity:.75; font-size:12px; line-height:1.35; }
+    canvas{
+      width:100%; height:520px; display:block; border-radius:12px;
+      background: radial-gradient(900px 520px at 50% 55%, rgba(85,120,180,.14), rgba(0,0,0,0));
+      border:1px solid rgba(255,255,255,.08);
+    }
+    .grid{
+      display:grid; gap:10px;
+      grid-template-columns: 1fr 1fr;
+    }
+    .grid .full{ grid-column: 1 / -1; }
+    label{ display:flex; justify-content:space-between; gap:10px; font-size:12px; opacity:.9; }
+    input[type="range"]{ width:100%; }
+    .pill{
+      font-size:12px; padding:6px 10px; border-radius:999px;
+      background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08);
+      display:inline-flex; gap:8px; align-items:center;
+    }
+    .kpi{
+      display:grid; grid-template-columns: 1fr 1fr; gap:10px;
+      margin-top:10px;
+    }
+    .kpi .box{
+      border:1px solid rgba(255,255,255,.08);
+      background:rgba(255,255,255,.04);
+      border-radius:12px;
+      padding:10px;
+    }
+    .kpi .big{ font-size:16px; font-weight:800; }
+    .btns{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+    button{
+      cursor:pointer;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.06);
+      color:#e8eef6;
+      border-radius:12px;
+      padding:10px 12px;
+      font-weight:650;
+    }
+    button:hover{ background:rgba(255,255,255,.09); }
+    .tiny{ font-size:11px; opacity:.8; }
+    .warn{ color:#ffd37a; }
+    .ok{ color:#7dffb3; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Old Quantum Theory Visualizer — “Action Integrals” → Quantized States</h1>
+      <div class="muted">
+        The book pages you sent are imposing <b>Bohr–Sommerfeld</b> conditions:
+        <span class="pill">∮ p<sub>k</sub> dq<sub>k</sub> = n<sub>k</sub> · h</span>
+        This demo visualizes a 2D orbit with (1) <b>radial</b> oscillation and (2) <b>angular</b> rotation,
+        and it computes approximate actions <b>J<sub>r</sub> = ∮ p<sub>r</sub> dr</b> and <b>J<sub>θ</sub> = ∮ p<sub>θ</sub> dθ</b>.
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="card">
+        <h2>Orbit + Action Visualization</h2>
+        <canvas id="c"></canvas>
+        <div class="muted tiny">
+          Visual cues: <span class="ok">green</span> = quantization close, <span class="warn">yellow</span> = far from integer · h.
+          The “area bars” below approximate the integral by accumulating p·dq over one cycle.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Controls</h2>
+
+        <div class="grid">
+          <div class="full">
+            <label><span>Planck scale (h) <span class="tiny">(scaled unit)</span></span><span id="hVal">1.00</span></label>
+            <input id="h" type="range" min="0.2" max="3.0" step="0.01" value="1.00"/>
+          </div>
+
+          <div>
+            <label><span>n<sub>r</sub> (radial integer)</span><span id="nrVal">2</span></label>
+            <input id="nr" type="range" min="0" max="12" step="1" value="2"/>
+          </div>
+          <div>
+            <label><span>n<sub>θ</sub> (angular integer)</span><span id="ntVal">3</span></label>
+            <input id="nt" type="range" min="1" max="16" step="1" value="3"/>
+          </div>
+
+          <div class="full">
+            <label><span>Radial amplitude</span><span id="ampVal">0.28</span></label>
+            <input id="amp" type="range" min="0.00" max="0.60" step="0.01" value="0.28"/>
+          </div>
+
+          <div class="full">
+            <label><span>Base radius</span><span id="r0Val">0.55</span></label>
+            <input id="r0" type="range" min="0.20" max="0.85" step="0.01" value="0.55"/>
+          </div>
+
+          <div class="full">
+            <label><span>Cycle speed</span><span id="spdVal">1.10</span></label>
+            <input id="spd" type="range" min="0.30" max="2.50" step="0.01" value="1.10"/>
+          </div>
+
+          <div class="full">
+            <label><span>Quantize mode</span><span id="modeVal">ON</span></label>
+            <input id="quantize" type="range" min="0" max="1" step="1" value="1"/>
+          </div>
+        </div>
+
+        <div class="btns">
+          <button id="snap">Snap to nearest quantized orbit</button>
+          <button id="pause">Pause</button>
+          <button id="reset">Reset trail</button>
+        </div>
+
+        <div class="kpi">
+          <div class="box">
+            <div class="muted">J<sub>r</sub> (≈ ∮ p<sub>r</sub> dr)</div>
+            <div class="big" id="Jr">—</div>
+            <div class="tiny muted" id="JrTarget">target: —</div>
+          </div>
+          <div class="box">
+            <div class="muted">J<sub>θ</sub> (≈ ∮ p<sub>θ</sub> dθ)</div>
+            <div class="big" id="Jt">—</div>
+            <div class="tiny muted" id="JtTarget">target: —</div>
+          </div>
+          <div class="box full">
+            <div class="muted">How to read this</div>
+            <div class="tiny muted">
+              In old quantum theory, each degree of freedom gets an integer: J<sub>k</sub> = n<sub>k</sub>·h.
+              This demo uses a <b>toy orbit</b> where we can tune “momentum-like” strength so the integral lands on integer·h.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ===== Canvas / helpers =====
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha:false });
+
+  function fitCanvas(){
+    const dpr = Math.max(1, Math.min(2.5, window.devicePixelRatio || 1));
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.floor(rect.width * dpr);
+    canvas.height = Math.floor(rect.height * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize', fitCanvas);
+  fitCanvas();
+
+  const $ = id => document.getElementById(id);
+  const el = {
+    h: $('h'), nr: $('nr'), nt: $('nt'),
+    amp: $('amp'), r0: $('r0'), spd: $('spd'),
+    quantize: $('quantize'),
+    snap: $('snap'), pause: $('pause'), reset: $('reset'),
+    hVal: $('hVal'), nrVal: $('nrVal'), ntVal: $('ntVal'),
+    ampVal: $('ampVal'), r0Val: $('r0Val'), spdVal: $('spdVal'),
+    modeVal: $('modeVal'),
+    Jr: $('Jr'), Jt: $('Jt'),
+    JrTarget: $('JrTarget'), JtTarget: $('JtTarget')
+  };
+
+  // ===== State =====
+  let t = 0;
+  let paused = false;
+
+  // trail of orbit points
+  const trail = [];
+  const TRAIL_MAX = 900;
+
+  // action accumulation over one radial cycle
+  // We'll measure over phase u = 0..2π of the radial oscillation
+  let uPrev = 0;
+  let rPrev = 0;
+  let thPrev = 0;
+
+  let Jr_acc = 0;   // ∮ pr dr
+  let Jt_acc = 0;   // ∮ pθ dθ
+  let cycleDone = false;
+
+  // Momentum-like toy model knobs:
+  // pr ~ m * dr/dt  (we set m=1)
+  // pθ ~ L          (angular momentum) (we set pθ constant-ish)
+  // We'll scale these so "quantize mode" can push them toward n*h.
+
+  // ===== UI read / write =====
+  function readParams(){
+    return {
+      h: parseFloat(el.h.value),
+      nr: parseInt(el.nr.value,10),
+      nt: parseInt(el.nt.value,10),
+      amp: parseFloat(el.amp.value),
+      r0: parseFloat(el.r0.value),
+      spd: parseFloat(el.spd.value),
+      quantize: parseInt(el.quantize.value,10) === 1
+    };
+  }
+
+  function refreshLabels(p){
+    el.hVal.textContent = p.h.toFixed(2);
+    el.nrVal.textContent = String(p.nr);
+    el.ntVal.textContent = String(p.nt);
+    el.ampVal.textContent = p.amp.toFixed(2);
+    el.r0Val.textContent = p.r0.toFixed(2);
+    el.spdVal.textContent = p.spd.toFixed(2);
+    el.modeVal.textContent = p.quantize ? "ON" : "OFF";
+  }
+
+  // ===== Orbit model =====
+  // We define a radial phase u = ω_r t and angle θ = ω_θ t (could be different)
+  // r(t) = r0 + amp * sin(u)
+  //
+  // In hydrogen-like old quantum theory you'd derive these from a potential,
+  // but here we keep it visual + controllable.
+
+  function step(dt, p){
+    t += dt * p.spd;
+
+    const omegaR = 1.0;                 // radial phase speed baseline
+    const omegaT_base = 0.75;           // angular baseline (will be scaled)
+    const u = omegaR * t;
+    const r = clamp(p.r0 + p.amp * Math.sin(u), 0.08, 0.92);
+
+    // velocity dr/dt
+    const drdt = p.amp * Math.cos(u) * omegaR * p.spd;
+
+    // Toy "momenta":
+    // pr = dr/dt
+    let pr = drdt;
+
+    // pθ acts like angular momentum; set by a "strength" L
+    // angle speed ~ L / r^2 (like central force)
+    let L = 0.9; // baseline angular momentum
+    let dthetadt = (omegaT_base * p.spd) * (L / (r*r + 0.02));
+
+    // Quantize mode: adjust pr scale and L so the action integrals land near integers.
+    if (p.quantize){
+      // We'll compute targets and gently nudge momenta toward matching them.
+      // Target Jr = nr*h ; target Jt = nt*h
+      // But Jr and Jt depend on the integral over cycle, so we approximate with proportional scaling:
+      // Jr scales ~ pr ; Jt scales ~ L
+      const JrTarget = p.nr * p.h;
+      const JtTarget = p.nt * p.h;
+
+      // Use last measured cycle values (if we have them) to scale.
+      // If we don't yet, estimate with safe defaults.
+      const JrEst = (Math.abs(Jr_acc) > 1e-6) ? Jr_acc : 1.0;
+      const JtEst = (Math.abs(Jt_acc) > 1e-6) ? Jt_acc : 1.0;
+
+      const kR = clamp(JrTarget / JrEst, 0.25, 4.0);
+      const kT = clamp(JtTarget / JtEst, 0.25, 4.0);
+
+      pr *= kR;
+      L *= kT;
+
+      // update angle speed with adjusted L
+      dthetadt = (omegaT_base * p.spd) * (L / (r*r + 0.02));
+    }
+
+    const theta = thPrev + dthetadt * dt;
+
+    return { u, r, theta, pr, dtheta: dthetadt*dt, dr: (r - rPrev) };
+  }
+
+  function clamp(x,a,b){ return Math.max(a, Math.min(b,x)); }
+
+  // ===== Action accumulation =====
+  // Jr ≈ Σ pr * Δr over one full radial cycle
+  // Jt ≈ Σ pθ * Δθ ; with pθ ~ L (constant-ish). We'll approximate pθ by r^2 * dθ/dt (toy).
+  function accumulateAction(state, p){
+    const { u, r, theta, pr } = state;
+
+    // detect cycle wrap: u crosses 2π boundary
+    const TWO_PI = Math.PI*2;
+    const uWrapped = ((u % TWO_PI) + TWO_PI) % TWO_PI;
+
+    // for consistent delta, compute du wrap crossing
+    let crossed = false;
+    if (uWrapped < uPrev) crossed = true; // wrapped from near 2π to ~0
+
+    // pθ toy: let pθ = r^2 * dθ/dt (so that Jθ resembles ∮ pθ dθ)
+    // We don't have dθ/dt directly, but we have Δθ (theta - thPrev)
+    const dtheta = theta - thPrev;
+    const ptheta = (r*r) * (dtheta / (1/60)); // normalized to ~60fps step
+    // Above is just a visualization-friendly scaling.
+
+    // Integrals
+    const dr = r - rPrev;
+    Jr_acc += pr * dr;
+    Jt_acc += ptheta * dtheta;
+
+    // On wrap, finalize one cycle and reset accumulators (keep last result to display)
+    if (crossed){
+      cycleDone = true;
+      // keep values as-is for display, but reset for new cycle
+      // Store last completed cycle values:
+      lastJr = Jr_acc;
+      lastJt = Jt_acc;
+      Jr_acc = 0;
+      Jt_acc = 0;
+    }
+
+    uPrev = uWrapped;
+    rPrev = r;
+    thPrev = theta;
+  }
+
+  let lastJr = 0;
+  let lastJt = 0;
+
+  // ===== Drawing =====
+  function draw(p, state){
+    const w = canvas.getBoundingClientRect().width;
+    const h = canvas.getBoundingClientRect().height;
+
+    // background
+    ctx.clearRect(0,0,w,h);
+    ctx.fillStyle = '#0b0f14';
+    ctx.fillRect(0,0,w,h);
+
+    // layout
+    const cx = w*0.52, cy = h*0.52;
+    const R = Math.min(w,h)*0.38;
+
+    // target center nucleus
+    ctx.beginPath();
+    ctx.arc(cx, cy, 7, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    ctx.fill();
+
+    // faint rings
+    for (let i=1;i<=5;i++){
+      ctx.beginPath();
+      ctx.arc(cx, cy, R*(i/5), 0, Math.PI*2);
+      ctx.strokeStyle = 'rgba(255,255,255,.06)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // orbit point
+    const x = cx + (state.r * R) * Math.cos(state.theta);
+    const y = cy + (state.r * R) * Math.sin(state.theta);
+
+    // store trail
+    trail.push({x,y});
+    if (trail.length > TRAIL_MAX) trail.shift();
+
+    // trail
+    ctx.beginPath();
+    for (let i=0;i<trail.length;i++){
+      const pt = trail[i];
+      if (i===0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    }
+    ctx.strokeStyle = 'rgba(120,180,255,.20)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // radius vector
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(x,y);
+    ctx.strokeStyle = 'rgba(255,255,255,.18)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // electron
+    ctx.beginPath();
+    ctx.arc(x, y, 6, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(120,220,255,.95)';
+    ctx.fill();
+
+    // ===== Action “bars” + status =====
+    const JrTarget = p.nr * p.h;
+    const JtTarget = p.nt * p.h;
+
+    const JrDisp = cycleDone ? lastJr : (lastJr || 0);
+    const JtDisp = cycleDone ? lastJt : (lastJt || 0);
+
+    const JrErr = Math.abs(JrDisp - JrTarget);
+    const JtErr = Math.abs(JtDisp - JtTarget);
+
+    const JrOk = JrTarget === 0 ? (Math.abs(JrDisp) < 0.15*p.h) : (JrErr < 0.15*p.h);
+    const JtOk = (JtErr < 0.15*p.h);
+
+    // action bars
+    const barX = 18, barY = 18, barW = Math.min(360, w-36), barH = 10, gap = 16;
+
+    drawBar(barX, barY, barW, barH, JrDisp, JrTarget, JrOk, "Jr ≈ ∮ pr dr");
+    drawBar(barX, barY + barH + gap, barW, barH, JtDisp, JtTarget, JtOk, "Jθ ≈ ∮ pθ dθ");
+
+    // overlay text
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    ctx.font = '12px ui-sans-serif,system-ui';
+    ctx.fillText(`r = ${state.r.toFixed(3)}   θ = ${state.theta.toFixed(2)} rad`, barX, barY + 62);
+
+    cycleDone = false; // consume flag
+  }
+
+  function drawBar(x,y,w,h,val,target,isOk,label){
+    // background
+    ctx.fillStyle = 'rgba(255,255,255,.06)';
+    ctx.fillRect(x,y,w,h);
+
+    // map value to bar (relative to target range)
+    const span = Math.max(1e-6, Math.abs(target) + 1.25);
+    const norm = clamp((val/span + 1)/2, 0, 1); // map roughly [-span, +span] to [0,1]
+    const tx = clamp((target/span + 1)/2, 0, 1);
+
+    // value fill
+    ctx.fillStyle = isOk ? 'rgba(125,255,179,.75)' : 'rgba(255,211,122,.75)';
+    ctx.fillRect(x, y, w*norm, h);
+
+    // target tick
+    ctx.beginPath();
+    ctx.moveTo(x + w*tx, y-3);
+    ctx.lineTo(x + w*tx, y+h+3);
+    ctx.strokeStyle = 'rgba(255,255,255,.85)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // label
+    ctx.fillStyle = 'rgba(255,255,255,.80)';
+    ctx.font = '12px ui-sans-serif,system-ui';
+    ctx.fillText(`${label}   value=${val.toFixed(3)}   target=${target.toFixed(3)}`, x, y + h + 14);
+  }
+
+  // ===== Main loop =====
+  let last = performance.now();
+  function loop(now){
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+
+    const p = readParams();
+    refreshLabels(p);
+
+    if (!paused){
+      const st = step(dt, p);
+      accumulateAction(st, p);
+      draw(p, st);
+
+      // update KPI text with last completed values (smoothly)
+      const JrTarget = p.nr * p.h;
+      const JtTarget = p.nt * p.h;
+
+      el.Jr.textContent = (lastJr || 0).toFixed(3);
+      el.Jt.textContent = (lastJt || 0).toFixed(3);
+      el.JrTarget.textContent = `target: ${JrTarget.toFixed(3)}  (${p.nr} · h)`;
+      el.JtTarget.textContent = `target: ${JtTarget.toFixed(3)}  (${p.nt} · h)`;
+    }
+
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // ===== Buttons =====
+  el.pause.addEventListener('click', () => {
+    paused = !paused;
+    el.pause.textContent = paused ? "Resume" : "Pause";
+  });
+
+  el.reset.addEventListener('click', () => {
+    trail.length = 0;
+    Jr_acc = 0; Jt_acc = 0;
+    lastJr = 0; lastJt = 0;
+  });
+
+  // "Snap" means: pick nr, nt from current measured Jr,Jt (closest integers)
+  el.snap.addEventListener('click', () => {
+    const p = readParams();
+    const hVal = p.h;
+    const jr = lastJr || 0;
+    const jt = lastJt || 0;
+
+    const nr = clamp(Math.round(jr / hVal), 0, 12);
+    const nt = clamp(Math.round(jt / hVal), 1, 16);
+
+    el.nr.value = String(nr);
+    el.nt.value = String(nt);
+  });
+
+})();
+</script>
+</body>
+</html>

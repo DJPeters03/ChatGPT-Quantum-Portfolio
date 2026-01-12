@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Action Integral Visual — Adiabatic Invariance → Quantization (∮ p dq = n h)</title>
+  <style>
+    :root{ color-scheme: dark; }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0; background:#0b0f14; color:#e8eef6;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .wrap{
+      width:min(1200px, 96vw);
+      margin:14px auto;
+      display:grid;
+      gap:12px;
+      grid-template-columns: 1.25fr 0.75fr;
+      align-items:start;
+    }
+    @media (max-width: 980px){ .wrap{ grid-template-columns: 1fr; } }
+
+    .card{
+      background:#0f1622;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:14px;
+      padding:12px;
+      box-shadow: 0 10px 26px rgba(0,0,0,.25);
+    }
+    h1{ font-size:18px; margin:0 0 6px; letter-spacing:.2px; }
+    .sub{ opacity:.86; font-size:13px; line-height:1.35; }
+
+    canvas{
+      width:100%;
+      height:auto;
+      display:block;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.08);
+      background: radial-gradient(1000px 500px at 15% 20%, rgba(120,160,255,.12), transparent 60%),
+                  radial-gradient(900px 500px at 80% 30%, rgba(255,120,200,.10), transparent 62%),
+                  #0b101a;
+    }
+    .grid2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      margin-top:10px;
+    }
+    @media (max-width: 980px){ .grid2{ grid-template-columns: 1fr; } }
+
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .row > *{ flex: 0 0 auto; }
+    label{ font-size:13px; opacity:.92; display:flex; gap:8px; align-items:center; }
+    input[type="range"]{ width: 260px; }
+    .pill{
+      font-size:12px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.06);
+      padding:6px 10px;
+      border-radius:999px;
+    }
+    .stats{
+      margin-top:10px;
+      display:grid;
+      gap:8px;
+      font-size:13px;
+      line-height:1.35;
+    }
+    .mono{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size:12.5px;
+    }
+    .kbd{
+      padding:2px 7px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.06);
+      border-radius:8px;
+      font-family: ui-monospace, monospace;
+      font-size:12px;
+    }
+    button{
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.06);
+      color:#e8eef6;
+      padding:8px 10px;
+      border-radius:10px;
+      cursor:pointer;
+    }
+    button:hover{ background:rgba(255,255,255,.09); }
+    .note{
+      margin-top:10px;
+      padding:10px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.05);
+      font-size:13px;
+      opacity:.92;
+    }
+    .legend{ display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
+    .dot{ width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:6px; vertical-align:middle; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>∮ p dq Visual: “Area in phase space” stays (almost) constant → then becomes quantized</h1>
+      <div class="sub">
+        We model a 1D oscillator (easy to see). Left: real-space motion <span class="mono">q(t)</span>.
+        Right: phase-space loop <span class="mono">(q,p)</span>. The shaded loop area is the <span class="mono">action J = ∮ p dq</span>.
+        Turn on <b>Adiabatic</b> to slowly change the system; the loop deforms but tries to keep the same area.
+        Turn on <b>Quantize</b> to snap to <span class="mono">J = n·h</span>.
+      </div>
+
+      <div class="grid2">
+        <canvas id="cReal" width="900" height="420" aria-label="Real space canvas"></canvas>
+        <canvas id="cPhase" width="900" height="420" aria-label="Phase space canvas"></canvas>
+      </div>
+
+      <div class="legend">
+        <div class="pill"><span class="dot" style="background:#7aa5ff"></span>Real-space particle</div>
+        <div class="pill"><span class="dot" style="background:#ffb86b"></span>Phase point (q,p)</div>
+        <div class="pill"><span class="dot" style="background:#9effa8"></span>Action area (J)</div>
+        <div class="pill"><span class="dot" style="background:#ff73c7"></span>Quantized target (n·h)</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h1>Controls</h1>
+      <div class="row" style="margin-top:8px;">
+        <label><input id="run" type="checkbox" checked /> Run</label>
+        <label><input id="adiab" type="checkbox" checked /> Adiabatic (slow change)</label>
+        <label><input id="quant" type="checkbox" /> Quantize (J = n·h)</label>
+        <button id="reset">Reset</button>
+      </div>
+
+      <div class="stats">
+        <label>Slow change speed
+          <input id="slow" type="range" min="0" max="1" step="0.001" value="0.18" />
+          <span class="pill mono" id="slowVal">0.180</span>
+        </label>
+
+        <label>Planck unit (visual scale “h”)
+          <input id="h" type="range" min="0.2" max="6" step="0.01" value="2.20" />
+          <span class="pill mono" id="hVal">2.20</span>
+        </label>
+
+        <label>Energy “kick” (changes J instantly)
+          <input id="kick" type="range" min="-3" max="3" step="0.01" value="0.00" />
+          <span class="pill mono" id="kickVal">0.00</span>
+        </label>
+
+        <div class="note">
+          <div><b>Keyboard:</b> <span class="kbd">Space</span> pause/run · <span class="kbd">A</span> toggle adiabatic · <span class="kbd">Q</span> toggle quantize · <span class="kbd">R</span> reset</div>
+          <div style="margin-top:8px;">
+            <b>Interpretation:</b> For a periodic system, the loop area in phase space is an “action”.
+            Under slow changes, <span class="mono">J</span> stays nearly constant (adiabatic invariant).
+            Early quantum theory postulated only orbits with <span class="mono">J = n h</span> are allowed.
+          </div>
+        </div>
+
+        <div class="note mono" id="readout"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ======= Canvas setup =======
+  const cReal = document.getElementById('cReal');
+  const cPhase = document.getElementById('cPhase');
+  const gR = cReal.getContext('2d');
+  const gP = cPhase.getContext('2d');
+
+  // ======= UI =======
+  const ui = {
+    run: document.getElementById('run'),
+    adiab: document.getElementById('adiab'),
+    quant: document.getElementById('quant'),
+    slow: document.getElementById('slow'),
+    h: document.getElementById('h'),
+    kick: document.getElementById('kick'),
+    reset: document.getElementById('reset'),
+    slowVal: document.getElementById('slowVal'),
+    hVal: document.getElementById('hVal'),
+    kickVal: document.getElementById('kickVal'),
+    readout: document.getElementById('readout'),
+  };
+
+  function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+  function lerp(a,b,t){ return a + (b-a)*t; }
+
+  // ======= Model: 1D harmonic oscillator =======
+  // q(t) = A cos(ω t + φ)
+  // p(t) = m dq/dt = -m ω A sin(ω t + φ)
+  // Action (phase-space area): J = ∮ p dq = π m ω A^2
+  // Also: J = 2π E / ω  => E = J ω / (2π)
+  const state0 = {
+    m: 1.0,
+    omega: 1.20,       // will slowly drift if adiabatic enabled
+    omegaBase: 1.20,
+    omegaDriftAmp: 0.90,
+    A: 1.20,
+    phi: 0,
+    t: 0,
+    J: 0,             // computed from A, omega
+    Jtarget: 0,       // quantized target n*h
+    n: 0
+  };
+
+  let S = structuredClone(state0);
+
+  function computeJ(A, omega, m){
+    return Math.PI * m * omega * A * A;
+  }
+  function computeAfromJ(J, omega, m){
+    // J = π m ω A^2 => A = sqrt(J / (π m ω))
+    return Math.sqrt(Math.max(0, J) / (Math.PI * m * Math.max(1e-6, omega)));
+  }
+
+  function reset(){
+    S = structuredClone(state0);
+    S.J = computeJ(S.A, S.omega, S.m);
+    S.Jtarget = S.J;
+    S.n = Math.max(1, Math.round(S.J / parseFloat(ui.h.value)));
+    ui.kick.value = "0.00";
+    ui.kickVal.textContent = "0.00";
+  }
+
+  ui.reset.addEventListener('click', reset);
+
+  // ======= Drawing helpers =======
+  function clear(ctx, w, h){
+    ctx.clearRect(0,0,w,h);
+  }
+  function text(ctx, x,y, s, alpha=1){
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "#e8eef6";
+    ctx.font = "12.5px ui-monospace, Menlo, Consolas, monospace";
+    ctx.fillText(s, x, y);
+    ctx.restore();
+  }
+
+  function drawGrid(ctx, w, h, pad){
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,.08)";
+    ctx.lineWidth = 1;
+    const gx0 = pad, gy0 = pad, gx1 = w-pad, gy1 = h-pad;
+    // border
+    ctx.strokeRect(gx0, gy0, gx1-gx0, gy1-gy0);
+    // inner grid
+    ctx.strokeStyle = "rgba(255,255,255,.06)";
+    for(let i=1;i<=4;i++){
+      const x = lerp(gx0,gx1,i/5);
+      const y = lerp(gy0,gy1,i/5);
+      ctx.beginPath(); ctx.moveTo(x,gy0); ctx.lineTo(x,gy1); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(gx0,y); ctx.lineTo(gx1,y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function circle(ctx, x,y,r, fill, stroke){
+    ctx.save();
+    if(fill){ ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); }
+    if(stroke){ ctx.strokeStyle = stroke; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.stroke(); }
+    ctx.restore();
+  }
+
+  // ======= Main render =======
+  const pad = 18;
+
+  function renderReal(){
+    const w = cReal.width, h = cReal.height;
+    clear(gR, w, h);
+    drawGrid(gR, w, h, pad);
+
+    // axes: q
+    const cx = w/2, cy = h/2;
+    gR.save();
+    gR.strokeStyle = "rgba(255,255,255,.16)";
+    gR.lineWidth = 1.5;
+    gR.beginPath(); gR.moveTo(pad, cy); gR.lineTo(w-pad, cy); gR.stroke();
+    gR.restore();
+
+    // compute q(t)
+    const q = S.A * Math.cos(S.omega*S.t + S.phi);
+    const dqdt = -S.A * S.omega * Math.sin(S.omega*S.t + S.phi);
+
+    // draw a “track”
+    const qMax = 2.3; // display scale
+    const x = lerp(pad, w-pad, (q/qMax + 1)/2);
+
+    // trail / waveform preview
+    gR.save();
+    gR.strokeStyle = "rgba(122,165,255,.35)";
+    gR.lineWidth = 2;
+    gR.beginPath();
+    const N = 220;
+    for(let i=0;i<N;i++){
+      const tt = S.t - (N-i)*0.010;
+      const qq = S.A * Math.cos(S.omega*tt + S.phi);
+      const xx = lerp(pad, w-pad, (qq/qMax + 1)/2);
+      const yy = cy + Math.sin(i*0.12)*6;
+      if(i===0) gR.moveTo(xx, yy);
+      else gR.lineTo(xx, yy);
+    }
+    gR.stroke();
+    gR.restore();
+
+    // particle
+    circle(gR, x, cy, 9, "#7aa5ff", "rgba(255,255,255,.12)");
+
+    // label
+    text(gR, pad+6, pad+16, "Real space: q(t)", 0.9);
+    text(gR, pad+6, pad+34, `q = ${q.toFixed(3)}   dq/dt = ${dqdt.toFixed(3)}`, 0.85);
+  }
+
+  function renderPhase(){
+    const w = cPhase.width, h = cPhase.height;
+    clear(gP, w, h);
+    drawGrid(gP, w, h, pad);
+
+    const gx0 = pad, gy0 = pad, gx1 = w-pad, gy1 = h-pad;
+    const cx = (gx0+gx1)/2, cy = (gy0+gy1)/2;
+
+    // compute current point in phase space
+    const q = S.A * Math.cos(S.omega*S.t + S.phi);
+    const p = -S.m * S.omega * S.A * Math.sin(S.omega*S.t + S.phi);
+
+    // scales
+    const qMax = 2.3;
+    const pMax = 2.8;
+
+    const X = (qq) => lerp(gx0,gx1,(qq/qMax + 1)/2);
+    const Y = (pp) => lerp(gy1,gy0,(pp/pMax + 1)/2);
+
+    // axes
+    gP.save();
+    gP.strokeStyle = "rgba(255,255,255,.14)";
+    gP.lineWidth = 1.5;
+    gP.beginPath(); gP.moveTo(gx0, cy); gP.lineTo(gx1, cy); gP.stroke();
+    gP.beginPath(); gP.moveTo(cx, gy0); gP.lineTo(cx, gy1); gP.stroke();
+    gP.restore();
+
+    // draw loop area (ellipse) by sampling points
+    const M = 360;
+    const pts = [];
+    for(let i=0;i<=M;i++){
+      const th = (i/M)*Math.PI*2;
+      const qq = S.A * Math.cos(th);
+      const pp = -S.m * S.omega * S.A * Math.sin(th);
+      pts.push([X(qq), Y(pp)]);
+    }
+
+    // filled area (action)
+    gP.save();
+    gP.fillStyle = "rgba(158,255,168,.11)";
+    gP.beginPath();
+    gP.moveTo(pts[0][0], pts[0][1]);
+    for(let i=1;i<pts.length;i++) gP.lineTo(pts[i][0], pts[i][1]);
+    gP.closePath();
+    gP.fill();
+
+    // loop outline
+    gP.strokeStyle = "rgba(158,255,168,.55)";
+    gP.lineWidth = 2;
+    gP.stroke();
+    gP.restore();
+
+    // quantized target (same shape but scaled to Jtarget)
+    if(ui.quant.checked){
+      const Aqt = computeAfromJ(S.Jtarget, S.omega, S.m);
+      const pts2 = [];
+      for(let i=0;i<=M;i++){
+        const th = (i/M)*Math.PI*2;
+        const qq = Aqt * Math.cos(th);
+        const pp = -S.m * S.omega * Aqt * Math.sin(th);
+        pts2.push([X(qq), Y(pp)]);
+      }
+      gP.save();
+      gP.strokeStyle = "rgba(255,115,199,.75)";
+      gP.lineWidth = 2;
+      gP.setLineDash([7,6]);
+      gP.beginPath();
+      gP.moveTo(pts2[0][0], pts2[0][1]);
+      for(let i=1;i<pts2.length;i++) gP.lineTo(pts2[i][0], pts2[i][1]);
+      gP.closePath();
+      gP.stroke();
+      gP.restore();
+    }
+
+    // current phase point
+    circle(gP, X(q), Y(p), 7, "#ffb86b", "rgba(255,255,255,.12)");
+
+    // label
+    text(gP, pad+6, pad+16, "Phase space: (q, p)", 0.9);
+    text(gP, pad+6, pad+34, `p = ${p.toFixed(3)}   J = ∮p dq`, 0.85);
+
+    // annotate “area = J”
+    gP.save();
+    gP.globalAlpha = 0.85;
+    gP.fillStyle = "rgba(158,255,168,.85)";
+    gP.font = "12px ui-monospace, Menlo, Consolas, monospace";
+    gP.fillText("area ≈ J", cx + 12, cy - 12);
+    gP.restore();
+  }
+
+  // ======= Evolution (adiabatic change + optional quantization) =======
+  function step(dt){
+    const slow = parseFloat(ui.slow.value);
+    const hUnit = parseFloat(ui.h.value);
+    ui.slowVal.textContent = slow.toFixed(3);
+    ui.hVal.textContent = hUnit.toFixed(2);
+    ui.kickVal.textContent = parseFloat(ui.kick.value).toFixed(2);
+
+    // Base drift in omega if adiabatic is on
+    if(ui.adiab.checked){
+      // slowly vary omega between omegaBase ± omegaDriftAmp*0.5
+      const target = S.omegaBase + 0.5*S.omegaDriftAmp*Math.sin(S.t*0.25);
+      // critical: "slow" change, so omega moves gradually
+      S.omega = lerp(S.omega, target, clamp(slow*dt*0.35, 0, 1));
+    }
+
+    // Apply an "energy kick" (instant change in action J)
+    const kick = parseFloat(ui.kick.value);
+    if(Math.abs(kick) > 1e-6){
+      // treat kick as dJ per second while slider != 0 (so user can push it)
+      S.J = Math.max(0, S.J + kick * dt * 1.2);
+    } else {
+      // otherwise keep J consistent with A and omega (model consistency)
+      // We'll treat J as the primary invariant, and update A from J + omega
+    }
+
+    // If quantized, set a target J = n h
+    if(ui.quant.checked){
+      const nRaw = Math.max(1, Math.round(S.J / hUnit));
+      S.n = nRaw;
+      S.Jtarget = S.n * hUnit;
+
+      // "Relax" J toward the quantized target (visual snapping)
+      // This mimics “only allowed actions survive”
+      const snap = clamp(0.65 * dt, 0, 1);
+      S.J = lerp(S.J, S.Jtarget, snap);
+    } else {
+      S.Jtarget = S.J;
+      S.n = Math.max(1, Math.round(S.J / hUnit));
+    }
+
+    // Adiabatic invariance: J stays ~ constant while omega changes, so amplitude adjusts.
+    // Enforce A from J and current omega:
+    S.A = computeAfromJ(S.J, S.omega, S.m);
+
+    // Advance phase
+    S.t += dt;
+
+    // Readout (E = J ω / (2π))
+    const E = S.J * S.omega / (2*Math.PI);
+    ui.readout.innerHTML =
+      `<b>Core idea</b><br>
+       <span class="mono">J = ∮ p dq</span> is the <b>area</b> of the loop in phase space.<br><br>
+       <b>Numbers</b><br>
+       <span class="mono">ω = ${S.omega.toFixed(3)}</span> &nbsp; | &nbsp;
+       <span class="mono">A = ${S.A.toFixed(3)}</span> &nbsp; | &nbsp;
+       <span class="mono">J = ${S.J.toFixed(3)}</span><br>
+       <span class="mono">E = J·ω / (2π) = ${E.toFixed(3)}</span><br>
+       ${ui.quant.checked
+        ? `<span class="mono" style="color:#ff73c7">n = ${S.n} &nbsp;→&nbsp; Jtarget = n·h = ${S.Jtarget.toFixed(3)}</span>`
+        : `<span class="mono">n ≈ round(J/h) = ${S.n} (not enforced)</span>`
+       }<br><br>
+       <b>What to watch</b><br>
+       If <b>Adiabatic</b> is ON, ω drifts slowly and the loop stretches/squeezes, but its <b>area</b> (J) tries to stay fixed.
+       If <b>Quantize</b> is ON, J snaps to <span class="mono">n·h</span>, making only certain “orbits” allowed.`;
+  }
+
+  // ======= Loop =======
+  let last = performance.now();
+  function loop(now){
+    const dt = Math.min(0.033, (now - last)/1000);
+    last = now;
+
+    if(ui.run.checked) step(dt);
+    renderReal();
+    renderPhase();
+    requestAnimationFrame(loop);
+  }
+
+  // ======= Keyboard =======
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if(k === ' '){
+      e.preventDefault();
+      ui.run.checked = !ui.run.checked;
+    }
+    if(k === 'a') ui.adiab.checked = !ui.adiab.checked;
+    if(k === 'q') ui.quant.checked = !ui.quant.checked;
+    if(k === 'r') reset();
+  });
+
+  // init
+  reset();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

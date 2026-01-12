@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Qubit Circle — 0/1 Split + Midpoint Superposition</title>
+  <style>
+    :root{ color-scheme: dark; }
+    html,body{ height:100%; margin:0; background:#0b0f14; color:#e8eef6; }
+    body{ font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    *{ box-sizing:border-box; }
+
+    .wrap{ width:min(1200px, 96vw); margin:14px auto; display:grid; gap:12px; }
+    .card{
+      background:#0f1622; border:1px solid rgba(255,255,255,.10);
+      border-radius:14px; padding:12px; box-shadow:0 10px 26px rgba(0,0,0,.25);
+    }
+    .topbar{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+
+    button{
+      background:#1a2636; border:1px solid rgba(255,255,255,.14);
+      color:#e8eef6; padding:10px 12px; border-radius:12px;
+      cursor:pointer; font-weight:900;
+    }
+    button:hover{ border-color: rgba(255,255,255,.25); }
+    button:active{ transform: translateY(1px); }
+
+    .pill{
+      display:flex; align-items:center; gap:8px;
+      background:#0b0f14; border:1px solid rgba(255,255,255,.10);
+      border-radius:999px; padding:8px 10px;
+      font-size:13px; opacity:.95;
+    }
+    input[type="range"]{ width:190px; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .hint{
+      font-size:13px; opacity:.84; line-height:1.35;
+      flex: 1 1 420px; min-width: 280px;
+    }
+
+    .vizCard{ padding:0; overflow:hidden; }
+    .vizFrame{ height:620px; width:100%; position:relative; }
+    canvas{ width:100%; height:100%; display:block; }
+
+    .below{
+      font-size:13px; opacity:.9; line-height:1.45;
+    }
+    .grid{
+      display:grid; grid-template-columns: 1fr 1fr;
+      gap:6px 12px; margin-top:10px; font-size:12.8px;
+    }
+    .k{ opacity:.78; }
+    .v{ font-weight:900; }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="card topbar">
+      <button id="resetBtn">Reset</button>
+
+      <div class="pill">
+        Speed
+        <input id="speed" type="range" min="0.05" max="3.0" step="0.01" value="1.0" />
+        <span class="mono" id="speedLabel">1.00</span>
+      </div>
+
+      <div class="pill">
+        Midpoint zone width
+        <input id="zone" type="range" min="2" max="28" step="1" value="10" />
+        <span class="mono" id="zoneLabel">10°</span>
+      </div>
+
+      <div class="pill">
+        Dot label:
+        <span class="mono" id="label">0</span>
+      </div>
+
+      <div class="hint">
+        Circle: <b>0 at top</b>, <b>1 at bottom</b>. Top half is red, bottom half is blue.
+        The dot cycles. It always shows <span class="mono">0</span> or <span class="mono">1</span>,
+        but at the midpoint line it turns <b>yellow</b> and shows <span class="mono">1|0</span>.
+      </div>
+    </div>
+
+    <div class="card vizCard">
+      <div class="vizFrame" id="frame">
+        <canvas id="c"></canvas>
+      </div>
+    </div>
+
+    <div class="card below">
+      <b>Meaning (your visual language):</b> Away from the midpoint, the qubit “leans” to 0 (top/red) or 1 (bottom/blue).
+      At the exact between-zone, we show <span class="mono">1|0</span> to represent “both possibilities.”
+      <div class="grid">
+        <div class="k">Dot angle (deg)</div><div class="v mono" id="angHud">—</div>
+        <div class="k">In midpoint zone?</div><div class="v mono" id="inHud">—</div>
+        <div class="k">Displayed label</div><div class="v mono" id="valHud">—</div>
+        <div class="k">Dot color</div><div class="v mono" id="colHud">—</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('c');
+    const frame  = document.getElementById('frame');
+    const ctx = canvas.getContext('2d');
+
+    const resetBtn = document.getElementById('resetBtn');
+
+    const speedSl = document.getElementById('speed');
+    const speedLabel = document.getElementById('speedLabel');
+
+    const zoneSl = document.getElementById('zone');
+    const zoneLabel = document.getElementById('zoneLabel');
+
+    const labelEl = document.getElementById('label');
+
+    const angHud = document.getElementById('angHud');
+    const inHud  = document.getElementById('inHud');
+    const valHud = document.getElementById('valHud');
+    const colHud = document.getElementById('colHud');
+
+    speedSl.addEventListener('input', ()=> speedLabel.textContent = Number(speedSl.value).toFixed(2));
+    zoneSl.addEventListener('input', ()=> zoneLabel.textContent = `${zoneSl.value}°`);
+
+    let W=0, H=0, DPR=1;
+    let cx=0, cy=0, R=0;
+
+    function resize(){
+      const rect = frame.getBoundingClientRect();
+      DPR = Math.max(devicePixelRatio || 1, 1);
+      canvas.width  = Math.floor(rect.width * DPR);
+      canvas.height = Math.floor(rect.height * DPR);
+      ctx.setTransform(DPR,0,0,DPR,0,0);
+      W = rect.width;
+      H = rect.height;
+      cx = W/2;
+      cy = H/2;
+      R = Math.min(W,H) * 0.34;
+    }
+    new ResizeObserver(resize).observe(frame);
+    resize();
+
+    // ---------- helpers ----------
+    function radToDeg(r){ return r * 180 / Math.PI; }
+    function wrapPi(a){
+      if (a > Math.PI) a -= Math.PI*2;
+      if (a < -Math.PI) a += Math.PI*2;
+      return a;
+    }
+    function angDist(a,b){
+      let d = a - b;
+      while (d > Math.PI) d -= Math.PI*2;
+      while (d < -Math.PI) d += Math.PI*2;
+      return Math.abs(d);
+    }
+
+    // ---------- motion ----------
+    // a is polar angle: top is -π/2, bottom is +π/2
+    let a = -Math.PI/2;
+    let baseOmega = 0.95; // rad/sec
+    let t = 0;
+
+    // Midpoints between top (0) and bottom (1) on the circle are LEFT and RIGHT
+    const MID_LEFT  = Math.PI;
+    const MID_RIGHT = 0;
+
+    function inMidZone(ang){
+      const zoneDeg = Number(zoneSl.value);
+      const zoneRad = zoneDeg * Math.PI / 180;
+      return (angDist(ang, MID_LEFT) <= zoneRad) || (angDist(ang, MID_RIGHT) <= zoneRad);
+    }
+
+    // Determine current “lean label” outside mid zone:
+    // Top half => 0, bottom half => 1
+    function leanLabel(ang){
+      // In our math, sin(ang) < 0 is upper half (top)
+      return (Math.sin(ang) < 0) ? "0" : "1";
+    }
+
+    // ---------- draw ----------
+    function drawSplitCircle(){
+      ctx.save();
+
+      // Top half red
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, R, Math.PI, 0, false);
+      ctx.closePath();
+      ctx.fillStyle = "#e74c3c";
+      ctx.fill();
+
+      // Bottom half blue
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, R, 0, Math.PI, false);
+      ctx.closePath();
+      ctx.fillStyle = "#1e90ff";
+      ctx.fill();
+
+      // Midline
+      ctx.strokeStyle = "rgba(255,255,255,.28)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx - R, cy);
+      ctx.lineTo(cx + R, cy);
+      ctx.stroke();
+
+      // Border
+      ctx.strokeStyle = "rgba(255,255,255,.92)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI*2);
+      ctx.stroke();
+
+      // Labels: 0 top, 1 bottom
+      ctx.fillStyle = "rgba(255,255,255,.95)";
+      ctx.font = "bold 22px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("0", cx, cy - R - 24);
+      ctx.fillText("1", cx, cy + R + 24);
+
+      ctx.restore();
+    }
+
+    function drawQubit(){
+      const x = cx + Math.cos(a)*R;
+      const y = cy + Math.sin(a)*R;
+
+      const mid = inMidZone(a);
+      const text = mid ? "1|0" : leanLabel(a);
+
+      // Dot color rules:
+      // - always white normally
+      // - midpoint => yellow
+      const dotColor = mid ? "#ffd400" : "#ffffff";
+      const haloColor = mid ? "rgba(255,212,0,0.22)" : "rgba(255,255,255,0.18)";
+
+      ctx.save();
+
+      // Halo
+      ctx.beginPath();
+      ctx.arc(x, y, 19, 0, Math.PI*2);
+      ctx.fillStyle = haloColor;
+      ctx.fill();
+
+      // Dot
+      ctx.beginPath();
+      ctx.arc(x, y, 9, 0, Math.PI*2);
+      ctx.fillStyle = dotColor;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(0,0,0,.35)";
+      ctx.stroke();
+
+      // Label beside dot
+      ctx.fillStyle = "rgba(255,255,255,.95)";
+      ctx.font = "bold 22px sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(text, x + 14, y - 10);
+
+      ctx.restore();
+
+      // HUD + top label
+      const deg = radToDeg(a);
+      angHud.textContent = `${deg.toFixed(1)}°`;
+      inHud.textContent  = mid ? "yes" : "no";
+      valHud.textContent = text;
+      colHud.textContent = mid ? "yellow" : "white";
+      labelEl.textContent = text;
+    }
+
+    // ---------- control ----------
+    function reset(){
+      a = -Math.PI/2;
+      baseOmega = 0.95;
+      t = 0;
+      labelEl.textContent = "0";
+      angHud.textContent = "—";
+      inHud.textContent  = "—";
+      valHud.textContent = "—";
+      colHud.textContent = "—";
+    }
+    resetBtn.addEventListener('click', reset);
+
+    // ---------- loop ----------
+    let last = performance.now();
+    speedLabel.textContent = Number(speedSl.value).toFixed(2);
+    zoneLabel.textContent = `${zoneSl.value}°`;
+
+    function loop(now){
+      const dt = Math.min(0.05, (now - last)/1000);
+      last = now;
+      t += dt;
+
+      const speed = Number(speedSl.value);
+      a += (baseOmega * speed) * dt;
+      a = wrapPi(a);
+
+      ctx.clearRect(0,0,W,H);
+      drawSplitCircle();
+      drawQubit();
+
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Qubit Number Calculator</title>
+<script src="https://cdn.jsdelivr.net/npm/mathjs@11.11.0/lib/browser/math.js"></script>
+<style>
+  body {
+    background:#0d1117; color:#e6edf3; font-family:system-ui, sans-serif;
+    max-width:700px; margin:2rem auto; padding:1rem;
+  }
+  h1 { text-align:center; color:#58a6ff; }
+  input, select, button {
+    font-size:1rem; padding:.6rem .7rem; border-radius:8px;
+    border:1px solid #30363d; background:#161b22; color:#e6edf3;
+    width:100%; margin-top:.3rem;
+  }
+  button { background:#1f6feb; border:none; cursor:pointer; margin-top:1rem; }
+  button:hover { background:#388bfd; }
+  .out {
+    background:#161b22; border:1px dashed #30363d; padding:1rem; border-radius:8px;
+    margin-top:1rem;
+  }
+  .example { color:#8b949e; font-size:.9rem; margin-bottom:.6rem; }
+  .mono { font-family:ui-monospace, monospace; color:#79c0ff; }
+</style>
+</head>
+<body>
+<h1>Qubit Number Calculator</h1>
+<p class="example">
+Enter either <span class="mono">a</span> or <span class="mono">b</span> for the qubit state 
+|ψ⟩ = a|0⟩ + b|1⟩, and this calculator finds the other so that |a|² + |b|² = 1.
+</p>
+<p class="example">
+Allowed inputs: <br>
+Real: <span class="mono">0.6</span>, <span class="mono">sqrt(3)/2</span>, <span class="mono">1/sqrt(2)</span> <br>
+Complex: <span class="mono">e^(i*pi/4)</span>, <span class="mono">0.6 + 0.8i</span>, <span class="mono">(1+i)/sqrt(2)</span>
+</p>
+
+<label for="known">Known amplitude:</label>
+<select id="known">
+  <option value="a">a (solve for b)</option>
+  <option value="b">b (solve for a)</option>
+</select>
+
+<label for="value">Enter value (a or b):</label>
+<input id="value" placeholder="e.g. 1/sqrt(2), e^(i*pi/4), 0.6+0.8i" />
+
+<button onclick="calculate()">Compute</button>
+
+<div id="output" class="out"></div>
+
+<script>
+function calculate() {
+  const known = document.getElementById('known').value;
+  const expr = document.getElementById('value').value.trim();
+  const out = document.getElementById('output');
+  if (!expr) { out.innerHTML = "Please enter a value."; return; }
+
+  try {
+    const v = math.evaluate(expr.replace(/\^/g, '**')); // allow ^ as exponent
+    const mag2 = math.pow(math.abs(v), 2);
+    if (mag2 > 1.0001) {
+      out.innerHTML = `<span style="color:#f85149">Error:</span> |${known}|² = ${mag2.toFixed(4)} > 1. 
+        Qubit amplitudes must satisfy |a|² + |b|² = 1.`;
+      return;
+    }
+    const rem2 = 1 - mag2;
+    const otherMag = Math.sqrt(rem2);
+    const symbol = known === 'a' ? 'b' : 'a';
+    const phase = 'e^(iθ)'; // generic phase freedom
+    const numeric = math.complex({r:otherMag, phi:0});
+    out.innerHTML = `
+      <b>Given:</b> ${known} = ${expr}<br>
+      |${known}|² = ${mag2.toFixed(6)}<br><br>
+      <b>Result:</b> The other amplitude ${symbol} satisfies |${symbol}|² = ${rem2.toFixed(6)}<br>
+      ⇒ |${symbol}| = ${otherMag.toFixed(6)}<br><br>
+      So one possible value is:<br>
+      <span class="mono">${symbol} = ${otherMag.toFixed(6)} × ${phase}</span><br><br>
+      (Magnitude shown; the phase θ can be any real number.)
+    `;
+  } catch (err) {
+    out.innerHTML = `<span style="color:#f85149">Invalid input:</span> ${err}`;
+  }
+}
+</script>
+</body>
+</html>

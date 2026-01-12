@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Quantum Swarm Intelligence — The Collective (Boids + Entanglement Phase Shifts)</title>
+  <style>
+    :root { color-scheme: dark; }
+    body{
+      margin:0; background:#070b10; color:#e9f1ff;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .wrap{
+      width:min(1200px, 96vw);
+      margin:14px auto;
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:12px;
+    }
+    .card{
+      background:rgba(15,22,34,0.9);
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:14px;
+      padding:12px;
+      box-shadow: 0 12px 30px rgba(0,0,0,.35);
+    }
+    h1{ margin:0 0 8px; font-size:18px; font-weight:800; letter-spacing:.2px; }
+    .sub{ opacity:.85; font-size:13px; line-height:1.35; }
+    .row{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap:12px;
+      align-items:start;
+    }
+    canvas{
+      width:100%;
+      height:auto;
+      border-radius:12px;
+      background: radial-gradient(1200px 600px at 50% 40%, rgba(40,70,120,.16), rgba(0,0,0,0));
+      border:1px solid rgba(255,255,255,.08);
+      display:block;
+    }
+    .controls{
+      display:grid;
+      gap:10px;
+    }
+    .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    label{ font-size:12px; opacity:.9; display:grid; gap:6px; }
+    input[type="range"]{ width:100%; }
+    .pill{
+      display:inline-flex; gap:8px; align-items:center;
+      padding:8px 10px;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:999px;
+      background:rgba(255,255,255,.04);
+      font-size:12px;
+    }
+    .btns{ display:flex; flex-wrap:wrap; gap:8px; }
+    button{
+      appearance:none; border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.06);
+      color:#e9f1ff;
+      padding:8px 10px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:700;
+      font-size:12px;
+    }
+    button:hover{ background:rgba(255,255,255,.09); }
+    .tiny{ font-size:11px; opacity:.8; line-height:1.35; }
+    .kbd{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; opacity:.95; }
+    .stat{
+      display:grid; gap:6px;
+      padding:10px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.03);
+      font-size:12px;
+    }
+    .stat b{ font-weight:800; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Quantum Swarm Intelligence — <span style="opacity:.9">“The Collective”</span></h1>
+      <div class="sub">
+        A Boids flock where some agents are <b>entangled</b>. When one agent sharply turns to avoid an obstacle, it triggers a
+        <b>phase shift</b> that instantly biases the steering of its entangled partners—like “they felt it” before seeing it.
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="card">
+        <canvas id="c" width="960" height="600"></canvas>
+        <div class="tiny" style="margin-top:8px;">
+          Tips: Drag to add an obstacle. Shift+Drag removes nearby obstacles. Keys:
+          <span class="kbd">Space</span> pause, <span class="kbd">R</span> reset, <span class="kbd">L</span> toggle links.
+        </div>
+      </div>
+
+      <div class="card controls">
+        <div class="grid2">
+          <label>Agents: <span id="nLabel" class="pill"></span>
+            <input id="n" type="range" min="30" max="250" value="120" />
+          </label>
+          <label>Obstacles: <span id="obsLabel" class="pill"></span>
+            <input id="obs" type="range" min="0" max="14" value="6" />
+          </label>
+        </div>
+
+        <div class="grid2">
+          <label>Entanglement density: <span id="eLabel" class="pill"></span>
+            <input id="ent" type="range" min="0" max="100" value="35" />
+          </label>
+          <label>Partners per agent (avg): <span id="kLabel" class="pill"></span>
+            <input id="k" type="range" min="0" max="6" value="2" />
+          </label>
+        </div>
+
+        <label>Quantum influence (steering bias): <span id="qLabel" class="pill"></span>
+          <input id="q" type="range" min="0" max="200" value="85" />
+        </label>
+
+        <div class="grid2">
+          <label>Decoherence (random drift): <span id="dLabel" class="pill"></span>
+            <input id="dec" type="range" min="0" max="200" value="35" />
+          </label>
+          <label>Phase speed (ω): <span id="wLabel" class="pill"></span>
+            <input id="omega" type="range" min="0" max="200" value="55" />
+          </label>
+        </div>
+
+        <div class="grid2">
+          <label>Boids radius: <span id="rLabel" class="pill"></span>
+            <input id="rad" type="range" min="20" max="140" value="70" />
+          </label>
+          <label>Speed limit: <span id="sLabel" class="pill"></span>
+            <input id="spd" type="range" min="1" max="8" value="4" />
+          </label>
+        </div>
+
+        <div class="btns">
+          <button id="pauseBtn">Pause</button>
+          <button id="resetBtn">Reset</button>
+          <button id="linksBtn">Toggle Links</button>
+          <button id="measureBtn">“Measure” (collapse phases)</button>
+        </div>
+
+        <div class="stat">
+          <div><b>What you’re seeing</b></div>
+          <div>• Each agent’s <b>color = phase</b> (0 → 2π mapped to hue).</div>
+          <div>• Faint lines = <b>entanglement</b> edges.</div>
+          <div>• When an agent avoids an obstacle sharply, it emits an <b>instant phase-kick</b> to entangled partners.</div>
+          <div class="tiny">This is a visual metaphor (not a physically exact quantum simulator), but it captures the “correlation / shared state” vibe cleanly.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const TAU = Math.PI * 2;
+
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  // UI
+  const ui = {
+    n: document.getElementById('n'),
+    obs: document.getElementById('obs'),
+    ent: document.getElementById('ent'),
+    k: document.getElementById('k'),
+    q: document.getElementById('q'),
+    dec: document.getElementById('dec'),
+    omega: document.getElementById('omega'),
+    rad: document.getElementById('rad'),
+    spd: document.getElementById('spd'),
+
+    nLabel: document.getElementById('nLabel'),
+    obsLabel: document.getElementById('obsLabel'),
+    eLabel: document.getElementById('eLabel'),
+    kLabel: document.getElementById('kLabel'),
+    qLabel: document.getElementById('qLabel'),
+    dLabel: document.getElementById('dLabel'),
+    wLabel: document.getElementById('wLabel'),
+    rLabel: document.getElementById('rLabel'),
+    sLabel: document.getElementById('sLabel'),
+
+    pauseBtn: document.getElementById('pauseBtn'),
+    resetBtn: document.getElementById('resetBtn'),
+    linksBtn: document.getElementById('linksBtn'),
+    measureBtn: document.getElementById('measureBtn'),
+  };
+
+  function updateLabels(){
+    ui.nLabel.textContent = `${ui.n.value}`;
+    ui.obsLabel.textContent = `${ui.obs.value}`;
+    ui.eLabel.textContent = `${ui.ent.value}%`;
+    ui.kLabel.textContent = `${ui.k.value}`;
+    ui.qLabel.textContent = `${(ui.q.value/100).toFixed(2)}×`;
+    ui.dLabel.textContent = `${(ui.dec.value/100).toFixed(2)}×`;
+    ui.wLabel.textContent = `${(ui.omega.value/100).toFixed(2)}×`;
+    ui.rLabel.textContent = `${ui.rad.value}px`;
+    ui.sLabel.textContent = `${ui.spd.value}px/frame`;
+  }
+  Object.values(ui).forEach(el => {
+    if(el && el.tagName === 'INPUT') el.addEventListener('input', updateLabels);
+  });
+  updateLabels();
+
+  // Simulation state
+  let boids = [];
+  let edges = new Map(); // i -> Set(partners)
+  let obstacles = [];
+  let showLinks = true;
+  let paused = false;
+
+  function rand(a,b){ return a + Math.random()*(b-a); }
+  function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+  function wrapAngle(a){
+    a %= TAU;
+    if(a < 0) a += TAU;
+    return a;
+  }
+  function dist2(ax,ay,bx,by){ const dx=ax-bx, dy=ay-by; return dx*dx+dy*dy; }
+  function norm(x,y){
+    const m = Math.hypot(x,y) || 1e-9;
+    return [x/m, y/m, m];
+  }
+  function limitVec(x,y,max){
+    const m = Math.hypot(x,y);
+    if(m <= max) return [x,y,m];
+    const s = max/(m||1e-9);
+    return [x*s, y*s, max];
+  }
+
+  function buildObstacles(count){
+    obstacles = [];
+    const margin = 60;
+    for(let i=0;i<count;i++){
+      obstacles.push({
+        x: rand(margin, canvas.width - margin),
+        y: rand(margin, canvas.height - margin),
+        r: rand(18, 42),
+      });
+    }
+  }
+
+  function buildBoids(N){
+    boids = [];
+    for(let i=0;i<N;i++){
+      const a = rand(0, TAU);
+      const speed = rand(1.5, 3.2);
+      boids.push({
+        x: rand(0, canvas.width),
+        y: rand(0, canvas.height),
+        vx: Math.cos(a)*speed,
+        vy: Math.sin(a)*speed,
+        phase: rand(0, TAU),     // “shared quantum-ish variable”
+        phaseVel: rand(-1, 1)*0.02,
+        kick: 0,                // phase-kick energy visual impulse
+        lastAvoid: 0,
+      });
+    }
+  }
+
+  function clearEdges(){
+    edges = new Map();
+    for(let i=0;i<boids.length;i++) edges.set(i, new Set());
+  }
+
+  function addEdge(i,j){
+    if(i===j) return;
+    edges.get(i).add(j);
+    edges.get(j).add(i);
+  }
+
+  function buildEntanglement(){
+    // density controls how many agents participate in entanglement at all
+    clearEdges();
+    const N = boids.length;
+    const density = (+ui.ent.value)/100;   // 0..1
+    const kAvg = +ui.k.value;              // 0..6
+
+    // mark entangled-capable agents
+    const active = [];
+    for(let i=0;i<N;i++){
+      if(Math.random() < density) active.push(i);
+    }
+    if(active.length < 2 || kAvg === 0) return;
+
+    // connect each active agent with ~kAvg partners (uniform random)
+    for(const i of active){
+      const k = Math.max(0, Math.round(rand(0, kAvg*2))); // noisy
+      for(let t=0;t<k;t++){
+        const j = active[Math.floor(Math.random()*active.length)];
+        if(j !== i) addEdge(i,j);
+      }
+    }
+  }
+
+  function resetAll(){
+    buildBoids(+ui.n.value);
+    buildObstacles(+ui.obs.value);
+    buildEntanglement();
+  }
+
+  // Rebuild when sliders that change topology move (avoid too many rebuilds)
+  let topologyTimer = 0;
+  function scheduleTopologyRebuild(){
+    clearTimeout(topologyTimer);
+    topologyTimer = setTimeout(() => {
+      // preserve obstacles unless obs slider changed
+      buildEntanglement();
+    }, 120);
+  }
+  ui.ent.addEventListener('input', scheduleTopologyRebuild);
+  ui.k.addEventListener('input', scheduleTopologyRebuild);
+
+  ui.n.addEventListener('input', () => {
+    // full rebuild
+    resetAll();
+  });
+  ui.obs.addEventListener('input', () => {
+    buildObstacles(+ui.obs.value);
+  });
+
+  ui.resetBtn.addEventListener('click', resetAll);
+  ui.linksBtn.addEventListener('click', () => showLinks = !showLinks);
+  ui.pauseBtn.addEventListener('click', () => { paused = !paused; ui.pauseBtn.textContent = paused ? "Resume" : "Pause"; });
+
+  ui.measureBtn.addEventListener('click', () => {
+    // "Measurement": collapse each phase to either 0 or π (two outcomes),
+    // with probability determined by cos(phase) (just a clean visual metaphor).
+    for(const b of boids){
+      const p0 = (1 + Math.cos(b.phase)) / 2; // 0..1
+      const outcome0 = Math.random() < p0;
+      b.phase = outcome0 ? 0 : Math.PI;
+      b.kick = 1.0;
+    }
+  });
+
+  // Keyboard shortcuts
+  window.addEventListener('keydown', (e) => {
+    if(e.code === 'Space'){ e.preventDefault(); paused = !paused; ui.pauseBtn.textContent = paused ? "Resume" : "Pause"; }
+    if(e.key.toLowerCase() === 'r'){ resetAll(); }
+    if(e.key.toLowerCase() === 'l'){ showLinks = !showLinks; }
+  });
+
+  // Mouse: add / remove obstacles
+  let dragging = false;
+  let dragMode = "add";
+  canvas.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    canvas.setPointerCapture(e.pointerId);
+    dragMode = e.shiftKey ? "remove" : "add";
+    handlePointer(e);
+  });
+  canvas.addEventListener('pointermove', (e) => { if(dragging) handlePointer(e); });
+  canvas.addEventListener('pointerup', (e) => { dragging = false; });
+
+  function handlePointer(e){
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+    if(dragMode === "add"){
+      // add only if not too close to existing
+      let ok = true;
+      for(const o of obstacles){
+        if(dist2(x,y,o.x,o.y) < (o.r + 26)*(o.r + 26)) { ok = false; break; }
+      }
+      if(ok){
+        obstacles.push({ x, y, r: rand(18, 44) });
+        ui.obs.value = clamp(obstacles.length, 0, +ui.obs.max);
+        updateLabels();
+      }
+    }else{
+      // remove nearest
+      const idx = obstacles.findIndex(o => dist2(x,y,o.x,o.y) < (o.r + 18)*(o.r + 18));
+      if(idx >= 0){
+        obstacles.splice(idx,1);
+        ui.obs.value = clamp(obstacles.length, 0, +ui.obs.max);
+        updateLabels();
+      }
+    }
+  }
+
+  // Core parameters (tuned for visuals)
+  function step(){
+    const N = boids.length;
+    const neighR = +ui.rad.value;
+    const neighR2 = neighR*neighR;
+
+    const speedLimit = +ui.spd.value;
+
+    const quantumStrength = (+ui.q.value)/100;      // 0..2
+    const decoherence = (+ui.dec.value)/100;        // 0..2
+    const omega = (+ui.omega.value)/100;            // 0..2
+
+    // boid force weights (classic)
+    const wAlign = 0.55;
+    const wCoh   = 0.35;
+    const wSep   = 0.95;
+    const wAvoid = 1.35;
+
+    // obstacle avoidance trigger threshold -> "phase-kick"
+    const avoidKickThreshold = 0.55;
+
+    // Pre-calc for speed
+    for(let i=0;i<N;i++){
+      const bi = boids[i];
+
+      // 1) Phase evolution (continuous)
+      bi.phaseVel += (Math.random()-0.5) * 0.002 * decoherence;   // decoherence noise
+      bi.phaseVel *= (1 - 0.01*decoherence);                      // damp
+      bi.phase = wrapAngle(bi.phase + (0.03 * omega) + bi.phaseVel);
+
+      // kick decays
+      bi.kick *= 0.92;
+      bi.lastAvoid *= 0.90;
+    }
+
+    // Compute acceleration for each boid
+    const ax = new Array(N).fill(0);
+    const ay = new Array(N).fill(0);
+
+    for(let i=0;i<N;i++){
+      const bi = boids[i];
+
+      let alignX=0, alignY=0, cohX=0, cohY=0, sepX=0, sepY=0;
+      let count = 0;
+
+      for(let j=0;j<N;j++){
+        if(i===j) continue;
+        const bj = boids[j];
+        const d2 = dist2(bi.x,bi.y,bj.x,bj.y);
+        if(d2 > neighR2) continue;
+
+        count++;
+        alignX += bj.vx; alignY += bj.vy;
+        cohX += bj.x;    cohY += bj.y;
+
+        // separation stronger at close range
+        const d = Math.sqrt(d2) || 1e-6;
+        const push = 1 / (d*d);
+        sepX += (bi.x - bj.x) * push;
+        sepY += (bi.y - bj.y) * push;
+      }
+
+      if(count > 0){
+        // alignment
+        let [nx, ny] = norm(alignX, alignY);
+        ax[i] += nx * wAlign;
+        ay[i] += ny * wAlign;
+
+        // cohesion (toward center)
+        cohX = cohX / count - bi.x;
+        cohY = cohY / count - bi.y;
+        [nx, ny] = norm(cohX, cohY);
+        ax[i] += nx * wCoh;
+        ay[i] += ny * wCoh;
+
+        // separation
+        [nx, ny] = norm(sepX, sepY);
+        ax[i] += nx * wSep;
+        ay[i] += ny * wSep;
+      }
+
+      // obstacles: steer away
+      let avoidX=0, avoidY=0;
+      for(const o of obstacles){
+        const dx = bi.x - o.x;
+        const dy = bi.y - o.y;
+        const d = Math.hypot(dx,dy) || 1e-6;
+        const safe = o.r + 18;
+        if(d < safe){
+          // hard push
+          const p = (safe - d) / safe;
+          avoidX += (dx / d) * (2.2 * p);
+          avoidY += (dy / d) * (2.2 * p);
+        } else if(d < safe + 45){
+          // soft push
+          const p = (safe + 45 - d) / (safe + 45);
+          avoidX += (dx / d) * (0.9 * p);
+          avoidY += (dy / d) * (0.9 * p);
+        }
+      }
+      const avoidMag = Math.hypot(avoidX, avoidY);
+      if(avoidMag > 0){
+        ax[i] += (avoidX / avoidMag) * wAvoid * avoidMag;
+        ay[i] += (avoidY / avoidMag) * wAvoid * avoidMag;
+      }
+
+      // 2) QUANTUM TWIST: entanglement-based steering bias
+      // The bias is perpendicular to velocity, scaled by sin(phase difference).
+      // This makes correlated "turning" feel like a "phase shift influence".
+      const partners = edges.get(i);
+      if(partners && partners.size){
+        // perpendicular to current heading:
+        const [vxN, vyN] = norm(bi.vx, bi.vy);
+        const perpX = -vyN;
+        const perpY =  vxN;
+
+        let qTurn = 0;
+        for(const j of partners){
+          const bj = boids[j];
+          const phaseDiff = wrapAngle(bi.phase - bj.phase);
+          // [-1,1] smooth coupling
+          qTurn += Math.sin(phaseDiff);
+        }
+        qTurn /= Math.max(1, partners.size);
+
+        ax[i] += perpX * quantumStrength * 0.75 * qTurn;
+        ay[i] += perpY * quantumStrength * 0.75 * qTurn;
+
+        // If this agent recently avoided something hard, it "phase-kicks" partners (instant correlation event)
+        if(bi.lastAvoid > avoidKickThreshold){
+          // Partners feel a correlated turn impulse immediately.
+          // Also: phase nudges slightly toward the trigger agent (visual correlation).
+          for(const j of partners){
+            const bj = boids[j];
+
+            const s = (bi.lastAvoid - avoidKickThreshold) * quantumStrength * 0.35;
+            // partner's perp
+            const [pvxN, pvyN] = norm(bj.vx, bj.vy);
+            const pperpX = -pvyN;
+            const pperpY =  pvxN;
+
+            // “instantaneous” bias: same sign as trigger’s turn direction
+            const triggerTurnSign = Math.sign((avoidX * (-vyN)) + (avoidY * (vxN))) || 1;
+            ax[j] += pperpX * s * triggerTurnSign;
+            ay[j] += pperpY * s * triggerTurnSign;
+
+            // phase shift
+            bj.phase = wrapAngle(bj.phase + 0.22 * triggerTurnSign);
+            bj.kick = Math.max(bj.kick, 0.75);
+          }
+        }
+      }
+
+      // boundaries: softly steer back in
+      const margin = 40;
+      if(bi.x < margin) ax[i] += 0.9;
+      if(bi.x > canvas.width - margin) ax[i] -= 0.9;
+      if(bi.y < margin) ay[i] += 0.9;
+      if(bi.y > canvas.height - margin) ay[i] -= 0.9;
+    }
+
+    // Integrate
+    for(let i=0;i<N;i++){
+      const b = boids[i];
+
+      b.vx += ax[i] * 0.22;
+      b.vy += ay[i] * 0.22;
+
+      // speed limit
+      const limited = limitVec(b.vx, b.vy, speedLimit);
+      b.vx = limited[0];
+      b.vy = limited[1];
+
+      // detect strong avoidance (for phase-kicks)
+      // use acceleration component that comes from obstacles: approximate via overall accel magnitude
+      const aMag = Math.hypot(ax[i], ay[i]);
+      b.lastAvoid = Math.max(b.lastAvoid, aMag * 0.22);
+
+      b.x += b.vx;
+      b.y += b.vy;
+
+      // wrap around edges (torus world) for nice continuous flow
+      if(b.x < 0) b.x += canvas.width;
+      if(b.x >= canvas.width) b.x -= canvas.width;
+      if(b.y < 0) b.y += canvas.height;
+      if(b.y >= canvas.height) b.y -= canvas.height;
+    }
+  }
+
+  function draw(){
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0,0,w,h);
+
+    // subtle starfield/noise
+    ctx.globalAlpha = 0.06;
+    for(let i=0;i<120;i++){
+      const x = (i*97.3 + performance.now()*0.02) % w;
+      const y = (i*53.7 + performance.now()*0.01) % h;
+      ctx.fillRect(x,y,1,1);
+    }
+    ctx.globalAlpha = 1;
+
+    // obstacles
+    for(const o of obstacles){
+      ctx.beginPath();
+      ctx.arc(o.x,o.y,o.r,0,TAU);
+      ctx.fillStyle = "rgba(255,255,255,0.05)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.14)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(o.x,o.y,o.r+18,0,TAU);
+      ctx.strokeStyle = "rgba(255,255,255,0.06)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // entanglement links
+    if(showLinks){
+      ctx.lineWidth = 1;
+      for(const [i,set] of edges.entries()){
+        const bi = boids[i];
+        for(const j of set){
+          if(j < i) continue; // draw each once
+          const bj = boids[j];
+
+          const d = Math.hypot(bi.x - bj.x, bi.y - bj.y);
+          const a = clamp(0.18 - d/1600, 0.02, 0.16);
+
+          // color based on phase similarity
+          const phaseDiff = Math.abs(Math.sin((bi.phase - bj.phase) * 0.5));
+          const alpha = a * (1.25 - phaseDiff);
+
+          ctx.strokeStyle = `rgba(120, 200, 255, ${alpha})`;
+          ctx.beginPath();
+          ctx.moveTo(bi.x, bi.y);
+          ctx.lineTo(bj.x, bj.y);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // boids
+    for(const b of boids){
+      const [vxN, vyN] = norm(b.vx, b.vy);
+      const ang = Math.atan2(vyN, vxN);
+
+      // phase to hue
+      const hue = (b.phase / TAU) * 360;
+
+      // agent body
+      const size = 7.5;
+      const tail = 10.5;
+      const wing = 5.8;
+
+      // glow based on kick
+      const glow = clamp(b.kick, 0, 1);
+      if(glow > 0.02){
+        ctx.globalAlpha = 0.35 * glow;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 18 + glow*18, 0, TAU);
+        ctx.fillStyle = `hsla(${hue}, 90%, 62%, 1)`;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(ang);
+
+      ctx.beginPath();
+      ctx.moveTo(size, 0);
+      ctx.lineTo(-tail, wing);
+      ctx.lineTo(-tail*0.65, 0);
+      ctx.lineTo(-tail, -wing);
+      ctx.closePath();
+
+      ctx.fillStyle = `hsla(${hue}, 92%, 62%, 0.95)`;
+      ctx.fill();
+
+      ctx.strokeStyle = `hsla(${hue}, 95%, 80%, 0.25)`;
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // HUD
+    ctx.font = "12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.fillStyle = "rgba(233,241,255,0.85)";
+    const entEdges = (() => {
+      let c = 0;
+      for(const set of edges.values()) c += set.size;
+      return Math.floor(c/2);
+    })();
+    ctx.fillText(`Agents: ${boids.length}   Obstacles: ${obstacles.length}   Entanglement edges: ${entEdges}   Links: ${showLinks ? "ON" : "OFF"}`, 14, 20);
+
+    ctx.fillStyle = "rgba(233,241,255,0.65)";
+    ctx.fillText(`Phase-kick: obstacle avoidance triggers instant correlated steering in entangled partners`, 14, 38);
+  }
+
+  // Main loop
+  let last = performance.now();
+  function loop(now){
+    const dt = Math.min(33, now - last);
+    last = now;
+
+    if(!paused){
+      // substeps for stability
+      const sub = dt > 16 ? 2 : 1;
+      for(let s=0;s<sub;s++) step();
+    }
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // Init
+  resetAll();
+  requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>

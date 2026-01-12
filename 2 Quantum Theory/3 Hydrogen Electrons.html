@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Einstein A/B — Quantum Transitions, Absorption & (Spontaneous/Stimulated) Emission</title>
+  <style>
+    :root{ color-scheme: dark; }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0; background:#0b0f14; color:#e8eef6;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .wrap{
+      width:min(1200px, 96vw);
+      margin:14px auto;
+      display:grid;
+      gap:12px;
+      grid-template-columns: 1.1fr 0.9fr;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .wrap{ grid-template-columns: 1fr; }
+    }
+    .card{
+      background:#0f1622;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:14px;
+      padding:12px;
+      box-shadow: 0 12px 28px rgba(0,0,0,.28);
+    }
+    h1{ font-size:18px; margin:0 0 8px; }
+    h2{ font-size:14px; margin:14px 0 8px; color:#cfe1ff; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    button{
+      cursor:pointer;
+      padding:10px 12px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,.14);
+      background:#132033;
+      color:#e8eef6;
+      font-weight:700;
+      letter-spacing:.2px;
+    }
+    button:active{ transform: translateY(1px); }
+    button.on{
+      background: linear-gradient(180deg, rgba(80,190,255,.25), rgba(19,32,51,1));
+      border-color: rgba(80,190,255,.35);
+    }
+    label{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      padding:8px 10px;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;
+      background: rgba(255,255,255,.03);
+    }
+    label span{ font-size:12px; color:#c9d7ef; min-width:150px; }
+    input[type="range"]{ width:240px; }
+    .tiny{ font-size:12px; color:#b7c6df; line-height:1.35; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    canvas{
+      width:100%;
+      height:auto;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.08);
+      background: radial-gradient(1200px 700px at 50% 30%, rgba(40,75,120,.20), rgba(7,10,15,1));
+      display:block;
+    }
+    .pill{
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+      padding:7px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      font-size:12px;
+      color:#cfe1ff;
+    }
+    .legend{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:8px;
+    }
+    .legend .item{
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      padding:8px 10px;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;
+      background: rgba(255,255,255,.03);
+    }
+    .swatch{
+      width:14px; height:14px; border-radius:4px;
+      border:1px solid rgba(255,255,255,.18);
+      margin-top:2px;
+    }
+    .hr{
+      height:1px;
+      background: rgba(255,255,255,.08);
+      margin:10px 0;
+    }
+    .stats{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:8px;
+    }
+    .stat{
+      padding:8px 10px;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;
+      background: rgba(255,255,255,.03);
+      font-size:12px;
+      color:#c9d7ef;
+    }
+    .stat b{ color:#e8eef6; }
+    .hint{
+      border-left: 3px solid rgba(80,190,255,.55);
+      padding:10px 12px;
+      background: rgba(80,190,255,.07);
+      border-radius:10px;
+      font-size:12px;
+      color:#d7e7ff;
+      line-height:1.35;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Einstein A/B Model: Probabilistic Absorption & Emission</h1>
+
+      <div class="row" style="justify-content:space-between;">
+        <div class="row">
+          <button id="toggleBtn" class="on">Radiation Field: ON</button>
+          <button id="resetBtn">Reset</button>
+          <span class="pill">
+            <span id="modeDot" class="swatch" style="background:rgba(90,220,255,.65)"></span>
+            <span id="modeText">Radiation density ρ active</span>
+          </span>
+        </div>
+        <span class="pill mono">Levels: n=1,2,3,4 (teaching model)</span>
+      </div>
+
+      <div class="hr"></div>
+
+      <canvas id="sim" width="980" height="600"></canvas>
+
+      <div class="hr"></div>
+
+      <div class="row">
+        <label><span>Atoms</span><input id="atoms" type="range" min="6" max="28" value="14"><span class="mono" id="atomsVal">14</span></label>
+
+        <label title="Radiation density ρ (think: intensity of surrounding light field). Affects absorption and stimulated emission.">
+          <span>Radiation density ρ</span>
+          <input id="rho" type="range" min="0" max="100" value="60">
+          <span class="mono" id="rhoVal">0.60</span>
+        </label>
+
+        <label title="Spontaneous emission coefficient A. Happens even when radiation field is OFF (ρ=0).">
+          <span>Spontaneous A</span>
+          <input id="Acoef" type="range" min="0" max="140" value="45">
+          <span class="mono" id="AVal">0.45</span>
+        </label>
+
+        <label title="Stimulated coefficient B. Multiplies with ρ. Higher B makes absorption/stimulated emission more likely.">
+          <span>Stimulated B</span>
+          <input id="Bcoef" type="range" min="0" max="160" value="85">
+          <span class="mono" id="BVal">0.85</span>
+        </label>
+
+        <label title="Photon lifetime (visual only).">
+          <span>Photon lifetime</span>
+          <input id="life" type="range" min="20" max="240" value="150">
+          <span class="mono" id="lifeVal">1.50s</span>
+        </label>
+
+        <label><span>Show wave cloud</span><input id="cloud" type="checkbox" checked></label>
+        <label><span>Show spectrum</span><input id="spectrum" type="checkbox" checked></label>
+      </div>
+
+      <div style="margin-top:10px" class="hint">
+        <b>New chapter idea:</b> Transitions are <b>probabilities</b>.
+        <span class="mono">Absorption ~ B·ρ</span> (up jump),
+        <span class="mono">Stimulated emission ~ B·ρ</span> (down jump triggered by field),
+        <span class="mono">Spontaneous emission ~ A</span> (down jump even with the field off).
+        Switching the field <b>OFF</b> sets <b>ρ → 0</b> so absorption & stimulated emission stop — but <b>spontaneous</b> emission still happens.
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Legend</h2>
+      <div class="legend">
+        <div class="item">
+          <div class="swatch" style="background:rgba(255,255,255,.85)"></div>
+          <div class="tiny"><b>Nucleus</b> (center). Rings are <b>allowed stationary states</b> (n-levels).</div>
+        </div>
+        <div class="item">
+          <div class="swatch" style="background:rgba(255,210,80,.85)"></div>
+          <div class="tiny"><b>Absorption (B·ρ)</b>: electron jumps <b>up</b>. No photon is emitted on the way up.</div>
+        </div>
+        <div class="item">
+          <div class="swatch" style="background:rgba(80,190,255,.85)"></div>
+          <div class="tiny"><b>Emission (down jump)</b>: electron drops and emits a photon. This can be <b>spontaneous (A)</b> or <b>stimulated (B·ρ)</b>.</div>
+        </div>
+        <div class="item">
+          <div class="swatch" style="background:rgba(180,120,255,.85)"></div>
+          <div class="tiny"><b>Spectrum bar</b>: accumulates emitted energy by transition (4→3, 3→2, 2→1, etc.).</div>
+        </div>
+      </div>
+
+      <h2>Stats</h2>
+      <div class="stats">
+        <div class="stat">Excited electrons: <b id="excitedCount">0</b></div>
+        <div class="stat">Photons on screen: <b id="photonCount">0</b></div>
+        <div class="stat">Emissions/sec: <b id="eps">0.0</b></div>
+        <div class="stat">Radiation field: <b id="fieldState">ON</b></div>
+      </div>
+
+      <h2>What this sim is (and isn’t)</h2>
+      <div class="tiny">
+        A <b>teaching visualization</b> of the Einstein A/B picture:
+        discrete levels + probabilistic transitions.
+        Real atoms have selection rules, degeneracy, many more levels, and true quantum wavefunctions.
+        Here, we keep the math idea visible: <span class="mono">rates → probabilities per dt</span>.
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ---------- Canvas setup ----------
+  const canvas = document.getElementById('sim');
+  const ctx = canvas.getContext('2d');
+
+  // ---------- UI ----------
+  const toggleBtn = document.getElementById('toggleBtn');
+  const resetBtn  = document.getElementById('resetBtn');
+
+  const atomsR    = document.getElementById('atoms');
+  const rhoR      = document.getElementById('rho');
+  const AR        = document.getElementById('Acoef');
+  const BR        = document.getElementById('Bcoef');
+  const lifeR     = document.getElementById('life');
+  const cloudC    = document.getElementById('cloud');
+  const spectrumC = document.getElementById('spectrum');
+
+  const atomsVal  = document.getElementById('atomsVal');
+  const rhoVal    = document.getElementById('rhoVal');
+  const AVal      = document.getElementById('AVal');
+  const BVal      = document.getElementById('BVal');
+  const lifeVal   = document.getElementById('lifeVal');
+
+  const excitedCountEl = document.getElementById('excitedCount');
+  const photonCountEl  = document.getElementById('photonCount');
+  const epsEl          = document.getElementById('eps');
+  const fieldStateEl   = document.getElementById('fieldState');
+
+  const modeDot  = document.getElementById('modeDot');
+  const modeText = document.getElementById('modeText');
+
+  // ---------- Teaching model ----------
+  const LEVELS = [1,2,3,4];
+
+  // Hydrogen-ish energy levels (eV scale) for color/labels (still teaching-only).
+  const E = {
+    1: -13.6,
+    2: -13.6/4,
+    3: -13.6/9,
+    4: -13.6/16
+  };
+
+  function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+  function lerp(a,b,t){ return a + (b-a)*t; }
+
+  function dE(nHigh, nLow){
+    return Math.abs(E[nLow] - E[nHigh]);
+  }
+
+  function photonColorFromDE(deltaE){
+    const t = clamp(deltaE / 13.6, 0, 1);
+    const hue = lerp(40, 240, t);
+    return `hsla(${hue}, 90%, 65%, 0.95)`;
+  }
+
+  function photonWavelengthLabel(deltaE){
+    const nm = 1240 / Math.max(0.1, deltaE);
+    return Math.round(nm) + "nm";
+  }
+
+  // ---------- World state ----------
+  let fieldOn = true; // field ON means ρ is active; OFF means ρ forced to 0
+  let atoms = [];
+  let photons = [];
+
+  const spectrumBuckets = new Map(); // "3→2" -> amount
+  function bucketKey(hi, lo){ return `${hi}→${lo}`; }
+
+  function resetSpectrum(){
+    spectrumBuckets.clear();
+    const pairs = [
+      [4,3],[3,2],[2,1],
+      [4,2],[3,1],[4,1]
+    ];
+    for(let i=0;i<pairs.length;i++){
+      const h = pairs[i][0], l = pairs[i][1];
+      spectrumBuckets.set(bucketKey(h,l), 0);
+    }
+  }
+
+  let emissionsWindow = []; // timestamps for EPS
+
+  // ---------- Objects ----------
+  class Photon {
+    constructor(x,y, vx,vy, color, ttl, label){
+      this.x=x; this.y=y;
+      this.vx=vx; this.vy=vy;
+      this.color=color;
+      this.ttl=ttl;
+      this.age=0;
+      this.label=label;
+      this.r = 2.2 + Math.random()*1.8;
+    }
+    step(dt){
+      this.age += dt;
+      this.x += this.vx*dt;
+      this.y += this.vy*dt;
+      this.vx *= Math.pow(0.995, dt*60);
+      this.vy *= Math.pow(0.995, dt*60);
+    }
+    alive(){ return this.age < this.ttl; }
+    draw(){
+      const a = 1 - (this.age / this.ttl);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = this.color;
+
+      ctx.globalAlpha = 0.55 * a;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.r*3.8, 0, Math.PI*2);
+      ctx.fill();
+
+      ctx.globalAlpha = 0.95 * a;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
+      ctx.fill();
+
+      if (a > 0.65 && Math.random() < 0.015){
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = "rgba(220,235,255,0.9)";
+        ctx.font = "11px ui-monospace, Menlo, Consolas, monospace";
+        ctx.fillText(this.label, this.x + 8, this.y - 6);
+      }
+      ctx.restore();
+    }
+  }
+
+  class Atom {
+    constructor(x,y){
+      this.x=x; this.y=y;
+      this.phase = Math.random()*Math.PI*2;
+      this.spin = (Math.random()*2-1) * 1.2;
+
+      this.n = 1;
+      this.prevN = 1;
+      this.jumpT = 0;
+      this.jumpDur = 0.14;
+      this.lastJumpDir = 0; // +1 absorption, -1 emission (for coloring)
+      this.lastCause = "";  // "A" | "Bρ" | ""
+    }
+
+    get radiusBase(){ return 18; }
+    radiusForN(n){ return this.radiusBase * (1 + 0.62*(n-1)); }
+
+    jumpTo(newN, dir, cause){
+      this.prevN = this.n;
+      this.n = newN;              // state is discrete
+      this.jumpT = 0;             // animation
+      this.lastJumpDir = dir;     // +1 up, -1 down
+      this.lastCause = cause || "";
+    }
+
+    // Choose an UP target (absorption)
+    pickUpTarget(){
+      const max = 4;
+      const r = Math.random();
+      let next;
+      if(r < 0.65) next = Math.min(this.n+1, max);
+      else if(r < 0.9) next = Math.min(this.n+2, max);
+      else next = max;
+      return clamp(next, 1, 4);
+    }
+
+    // Choose a DOWN target (emission)
+    pickDownTarget(){
+      const r = Math.random();
+      let next;
+      if(r < 0.72) next = this.n - 1;
+      else if(r < 0.9) next = this.n - 2;
+      else next = 1;
+      return clamp(next, 1, 4);
+    }
+
+    step(dt, rho, A, B, photonTTL){
+      this.phase += this.spin * dt;
+
+      // Probabilities per step:
+      // Absorption:   P_up  ~ (B * rho) * dt
+      // Stim emission P_dnB ~ (B * rho) * dt   (only if excited)
+      // Spontaneous:  P_dnA ~ (A)       * dt   (only if excited)
+      //
+      // We cap to keep it stable for dt.
+      const Brho = B * rho;
+      const Pup  = clamp(Brho * dt, 0, 0.85);
+
+      // Do absorption first (teaching: field can kick up)
+      if(this.n < 4 && Pup > 0 && Math.random() < Pup){
+        const next = this.pickUpTarget();
+        if(next > this.n) this.jumpTo(next, +1, "B·ρ");
+      }
+
+      // Emission if excited
+      if(this.n > 1){
+        const PdnA = clamp(A * dt, 0, 0.85);
+        const PdnB = clamp(Brho * dt, 0, 0.85);
+
+        // Decide cause (A vs B·ρ). We can do two Bernoulli draws or a combined choice.
+        // We'll do a combined chance, then split by weights so it "feels" like the chapter.
+        const Pany = clamp(PdnA + PdnB, 0, 0.95);
+        if(Math.random() < Pany){
+          const wA = PdnA / Math.max(1e-9, (PdnA + PdnB));
+          const cause = (Math.random() < wA) ? "A" : "B·ρ";
+
+          const next = this.pickDownTarget();
+          if(next < this.n){
+            emitPhotonFromTransition(this, this.n, next, photonTTL, cause);
+            this.jumpTo(next, -1, cause);
+          }
+        }
+      }
+
+      if(this.jumpT < this.jumpDur) this.jumpT += dt;
+    }
+
+    draw(showCloud){
+      const cx = this.x, cy = this.y;
+
+      // subtle atom cell
+      ctx.save();
+      ctx.globalAlpha = 0.22;
+      ctx.strokeStyle = "rgba(180,210,255,0.18)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, 78, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+
+      // rings
+      for(let i=0;i<LEVELS.length;i++){
+        const n = LEVELS[i];
+        const r = this.radiusForN(n);
+
+        ctx.save();
+        const isCurrent = (n === this.n);
+        const glow = isCurrent ? 0.75 : 0.18;
+
+        ctx.strokeStyle = isCurrent ? "rgba(255,255,255,0.45)" : "rgba(210,225,255,0.12)";
+        ctx.lineWidth = isCurrent ? 2 : 1;
+
+        ctx.globalAlpha = glow;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI*2);
+        ctx.stroke();
+
+        if(showCloud){
+          ctx.globalAlpha = isCurrent ? 0.24 : 0.06;
+          ctx.fillStyle = isCurrent ? "rgba(90,220,255,0.22)" : "rgba(90,220,255,0.06)";
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI*2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      // nucleus
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, 3.2, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 9.5, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+
+      // electron dot (animate between prevN and n)
+      const t = clamp(this.jumpT / this.jumpDur, 0, 1);
+      const rPrev = this.radiusForN(this.prevN);
+      const rNow  = this.radiusForN(this.n);
+      const rr = lerp(rPrev, rNow, easeOutCubic(t));
+
+      const ex = cx + Math.cos(this.phase) * rr;
+      const ey = cy + Math.sin(this.phase) * rr;
+
+      // color cue:
+      // up jump -> warm (absorption)
+      // down jump -> cool (emission); tint differs if A vs B·ρ
+      let dotColor = "rgba(200,220,255,0.95)";
+      if(this.lastJumpDir > 0 && t < 1) dotColor = "rgba(255,210,80,0.95)";
+      if(this.lastJumpDir < 0 && t < 1){
+        dotColor = (this.lastCause === "A") ? "rgba(120,210,255,0.95)" : "rgba(180,120,255,0.95)";
+      }
+
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+
+      // glow
+      ctx.fillStyle = dotColor;
+      ctx.globalAlpha = 0.55;
+      ctx.beginPath();
+      ctx.arc(ex, ey, 6.0, 0, Math.PI*2);
+      ctx.fill();
+
+      // core
+      ctx.globalAlpha = 0.95;
+      ctx.beginPath();
+      ctx.arc(ex, ey, 2.4, 0, Math.PI*2);
+      ctx.fill();
+
+      // label
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = "rgba(220,235,255,0.85)";
+      ctx.font = "11px ui-monospace, Menlo, Consolas, monospace";
+      ctx.fillText("n=" + this.n, cx - 12, cy + 92);
+
+      // tiny cause hint when mid-jump
+      if(t < 1 && this.lastCause){
+        ctx.globalAlpha = 0.75;
+        ctx.fillStyle = "rgba(220,235,255,0.75)";
+        ctx.fillText(this.lastCause, cx - 18, cy + 106);
+      }
+
+      ctx.restore();
+    }
+  }
+
+  function easeOutCubic(t){ return 1 - Math.pow(1-t, 3); }
+
+  // ---------- Core actions ----------
+  function emitPhotonFromTransition(atom, hi, lo, photonTTL, cause){
+    const delta = dE(hi, lo);
+    const color = photonColorFromDE(delta);
+
+    const angle = Math.random()*Math.PI*2;
+    const speed = 90 + delta*18 + Math.random()*70;
+    const vx = Math.cos(angle) * speed;
+    const vy = Math.sin(angle) * speed;
+
+    const tag = (cause === "A") ? "spont" : "stim";
+    const label = `${hi}→${lo} (${photonWavelengthLabel(delta)}) ${tag}`;
+
+    photons.push(new Photon(atom.x, atom.y, vx, vy, color, photonTTL, label));
+
+    const key = bucketKey(hi, lo);
+    if(!spectrumBuckets.has(key)) spectrumBuckets.set(key, 0);
+    spectrumBuckets.set(key, spectrumBuckets.get(key) + delta);
+
+    emissionsWindow.push(performance.now());
+  }
+
+  function rebuildAtoms(count){
+    atoms = [];
+    const w = canvas.width, h = canvas.height;
+
+    const cols = Math.ceil(Math.sqrt(count));
+    const rows = Math.ceil(count / cols);
+    const padX = 80;
+    const padY = 90;
+
+    const usableW = w - padX*2;
+    const usableH = h - padY*2;
+
+    let i=0;
+    for(let r=0; r<rows; r++){
+      for(let c=0; c<cols; c++){
+        if(i++ >= count) break;
+        const x = padX + (c + 0.5) * (usableW / cols) + (Math.random()*16-8);
+        const y = padY + (r + 0.5) * (usableH / rows) + (Math.random()*16-8);
+        atoms.push(new Atom(x,y));
+      }
+    }
+  }
+
+  function resetAll(){
+    photons = [];
+    emissionsWindow = [];
+    resetSpectrum();
+    rebuildAtoms(parseInt(atomsR.value, 10));
+  }
+
+  // ---------- Drawing ----------
+  function roundRect(ctx, x, y, w, h, r){
+    const rr = Math.min(r, w/2, h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+rr, y);
+    ctx.arcTo(x+w, y, x+w, y+h, rr);
+    ctx.arcTo(x+w, y+h, x, y+h, rr);
+    ctx.arcTo(x, y+h, x, y, rr);
+    ctx.arcTo(x, y, x+w, y, rr);
+    ctx.closePath();
+  }
+
+  function drawBackground(rho, A, B){
+    const w = canvas.width, h = canvas.height;
+
+    // stars
+    ctx.save();
+    ctx.globalAlpha = 0.14;
+    for(let i=0;i<40;i++){
+      const x = (i*97) % w;
+      const y = (i*191) % h;
+      ctx.fillStyle = "rgba(210,230,255,0.25)";
+      ctx.fillRect(x, y, 1, 1);
+    }
+    ctx.restore();
+
+    // overlay text
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = "rgba(220,235,255,0.92)";
+    ctx.font = "600 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.fillText("Einstein A/B picture: probabilities per dt (not deterministic timing).", 14, 24);
+
+    const rhoEff = fieldOn ? rho : 0;
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = "rgba(170,195,230,0.92)";
+    ctx.font = "12px ui-monospace, Menlo, Consolas, monospace";
+    ctx.fillText(
+      `Rates: absorption ~ B·ρ, stimulated emission ~ B·ρ, spontaneous emission ~ A.  ρ=${rhoEff.toFixed(2)}  A=${A.toFixed(2)}  B=${B.toFixed(2)}`,
+      14, 44
+    );
+
+    ctx.globalAlpha = 0.82;
+    ctx.fillStyle = fieldOn ? "rgba(180,235,255,0.9)" : "rgba(255,215,150,0.9)";
+    ctx.fillText(
+      fieldOn ? "FIELD ON → absorption + stimulated emission active" : "FIELD OFF → ρ=0 (only spontaneous emission remains)",
+      14, 64
+    );
+
+    ctx.restore();
+  }
+
+  function drawSpectrum(){
+    if(!spectrumC.checked) return;
+
+    const w = canvas.width;
+    const panelW = 300;
+    const panelH = 170;
+    const x = w - panelW - 14;
+    const y = 14;
+
+    ctx.save();
+    ctx.fillStyle = "rgba(10,14,20,0.72)";
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 1;
+    roundRect(ctx, x, y, panelW, panelH, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(210,230,255,0.92)";
+    ctx.font = "700 12px ui-sans-serif, system-ui";
+    ctx.fillText("Emission Spectrum (by transition)", x+12, y+18);
+
+    const keys = Array.from(spectrumBuckets.keys());
+    const values = keys.map(k => spectrumBuckets.get(k));
+    const maxV = Math.max(1e-6, ...values);
+
+    const barX = x+12;
+    let barY = y+30;
+    const barW = panelW - 24;
+    const barH = 18;
+    const gap = 6;
+
+    ctx.font = "11px ui-monospace, Menlo, Consolas, monospace";
+
+    for(let i=0;i<keys.length;i++){
+      const k = keys[i];
+      const v = spectrumBuckets.get(k);
+      const t = clamp(v / maxV, 0, 1);
+
+      const parts = k.split("→");
+      const hi = parseInt(parts[0],10);
+      const lo = parseInt(parts[1],10);
+      const delta = dE(hi, lo);
+      const col = photonColorFromDE(delta);
+
+      ctx.fillStyle = "rgba(180,205,240,0.92)";
+      ctx.fillText(k, barX, barY + 12);
+
+      ctx.fillStyle = "rgba(255,255,255,0.06)";
+      ctx.fillRect(barX + 48, barY, barW - 48, barH);
+
+      ctx.fillStyle = col;
+      ctx.globalAlpha = 0.9;
+      ctx.fillRect(barX + 48, barY, (barW - 48) * t, barH);
+      ctx.globalAlpha = 1;
+
+      ctx.fillStyle = "rgba(220,235,255,0.8)";
+      ctx.fillText(photonWavelengthLabel(delta), barX + barW - 62, barY + 12);
+
+      barY += barH + gap;
+      if(barY > y + panelH - 24) break;
+    }
+
+    ctx.restore();
+  }
+
+  // ---------- Main loop ----------
+  let last = performance.now();
+
+  function step(now){
+    const dt = Math.min(0.033, (now - last)/1000);
+    last = now;
+
+    const atomCount = parseInt(atomsR.value,10);
+
+    // ρ, A, B are 0..~1.6-ish from sliders
+    const rho = parseInt(rhoR.value,10) / 100;
+    const A   = parseInt(AR.value,10) / 100;
+    const B   = parseInt(BR.value,10) / 100;
+
+    const photonTTL = parseInt(lifeR.value,10) / 100;
+
+    atomsVal.textContent = atomCount;
+    rhoVal.textContent   = rho.toFixed(2);
+    AVal.textContent     = A.toFixed(2);
+    BVal.textContent     = B.toFixed(2);
+    lifeVal.textContent  = photonTTL.toFixed(2) + "s";
+
+    if(atoms.length !== atomCount){
+      rebuildAtoms(atomCount);
+    }
+
+    const rhoEff = fieldOn ? rho : 0;
+
+    // Update atoms
+    for(let i=0;i<atoms.length;i++){
+      atoms[i].step(dt, rhoEff, A, B, photonTTL);
+    }
+
+    // Update photons
+    for(let i=0;i<photons.length;i++){
+      const p = photons[i];
+      p.step(dt);
+
+      if(p.x < 6){ p.x=6; p.vx = Math.abs(p.vx)*0.8; }
+      if(p.x > canvas.width-6){ p.x=canvas.width-6; p.vx = -Math.abs(p.vx)*0.8; }
+      if(p.y < 6){ p.y=6; p.vy = Math.abs(p.vy)*0.8; }
+      if(p.y > canvas.height-6){ p.y=canvas.height-6; p.vy = -Math.abs(p.vy)*0.8; }
+    }
+    photons = photons.filter(p => p.alive());
+
+    // EPS over last 1.5s
+    const cutoff = now - 1500;
+    while(emissionsWindow.length && emissionsWindow[0] < cutoff) emissionsWindow.shift();
+    const eps = emissionsWindow.length / 1.5;
+
+    // Stats
+    let excited = 0;
+    for(let i=0;i<atoms.length;i++){
+      if(atoms[i].n > 1) excited++;
+    }
+    excitedCountEl.textContent = excited;
+    photonCountEl.textContent  = photons.length;
+    epsEl.textContent          = eps.toFixed(1);
+    fieldStateEl.textContent   = fieldOn ? "ON" : "OFF";
+
+    // Draw
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    drawBackground(rho, A, B);
+
+    for(let i=0;i<atoms.length;i++){
+      atoms[i].draw(cloudC.checked);
+    }
+    for(let i=0;i<photons.length;i++){
+      photons[i].draw();
+    }
+    drawSpectrum();
+
+    requestAnimationFrame(step);
+  }
+
+  // ---------- Interactions ----------
+  toggleBtn.addEventListener('click', () => {
+    fieldOn = !fieldOn;
+    toggleBtn.textContent = "Radiation Field: " + (fieldOn ? "ON" : "OFF");
+    toggleBtn.classList.toggle('on', fieldOn);
+
+    modeDot.style.background = fieldOn ? "rgba(90,220,255,.65)" : "rgba(255,210,80,.65)";
+    modeText.textContent = fieldOn ? "Radiation density ρ active" : "ρ set to 0 (only A remains)";
+  });
+
+  resetBtn.addEventListener('click', resetAll);
+
+  window.addEventListener('keydown', (e) => {
+    if(e.code === 'Space'){
+      e.preventDefault();
+      toggleBtn.click();
+    }
+    if(e.key.toLowerCase() === 'r'){
+      resetBtn.click();
+    }
+  });
+
+  // ---------- Init ----------
+  resetSpectrum();
+  rebuildAtoms(parseInt(atomsR.value,10));
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>

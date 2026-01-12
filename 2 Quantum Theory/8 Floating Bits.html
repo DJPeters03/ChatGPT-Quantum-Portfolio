@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Split Ball with Spawning Inner Balls</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #111;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="play"></canvas>
+
+  <script>
+    const canvas = document.getElementById('play');
+    const ctx = canvas.getContext('2d');
+
+    // Responsive sizing
+    function resize() {
+      // Fit nicely on screen
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      // Use a square-ish area for the circle
+      const size = Math.min(w, h) * 0.9;
+      canvas.style.width = size + 'px';
+      canvas.style.height = size + 'px';
+      // Set drawing size (account for DPR)
+      const DPR = Math.max(window.devicePixelRatio || 1, 1);
+      canvas.width = Math.floor(size * DPR);
+      canvas.height = Math.floor(size * DPR);
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0); // scale drawing to CSS pixels
+      centerX = size / 2;
+      centerY = size / 2;
+      mainRadius = size * 0.32;
+    }
+
+    window.addEventListener('resize', resize, { passive: true });
+
+    let centerX = 0;
+    let centerY = 0;
+    let mainRadius = 0;
+
+    resize();
+
+    // Small balls inside the main ball
+    class Ball {
+      constructor(x, y, r, vx, vy, color) {
+        this.x = x;
+        this.y = y;
+        this.r = r;
+        this.vx = vx;
+        this.vy = vy;
+        this.color = color;
+      }
+      update(dt) {
+        // Move
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+
+        // Bounce off the inner boundary of the main ball
+        const dx = this.x - centerX;
+        const dy = this.y - centerY;
+        const dist = Math.hypot(dx, dy);
+        const maxDist = mainRadius - this.r;
+        if (dist > maxDist) {
+          // Reflect velocity along the normal
+          const nx = dx / dist;
+          const ny = dy / dist;
+          const dot = this.vx * nx + this.vy * ny;
+          this.vx -= 2 * dot * nx;
+          this.vy -= 2 * dot * ny;
+          // Move back inside
+          this.x = centerX + nx * maxDist;
+          this.y = centerY + ny * maxDist;
+        }
+
+        // Optional gentle drift to feel alive
+        // this.vx += Math.sin(this.x * 0.01) * 0.02;
+        // this.vy += Math.cos(this.y * 0.01) * 0.02;
+      }
+      draw(ctx) {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+      }
+    }
+
+    const innerBalls = [];
+    const MAX_BALLS = 16;
+
+    // Spawn a ball somewhere inside the main circle
+    function spawnBall() {
+      const r = 4 + Math.random() * 8;
+      // Place near the center but not exactly at it
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * (mainRadius - r - 4);
+      const x = centerX + Math.cos(angle) * dist;
+      const y = centerY + Math.sin(angle) * dist;
+      const speed = 20 + Math.random() * 60;
+      const a = Math.random() * Math.PI * 2;
+      const vx = Math.cos(a) * speed;
+      const vy = Math.sin(a) * speed;
+      innerBalls.push(new Ball(x, y, r, vx, vy, '#dddddd'));
+    }
+
+    // Initialize with some balls
+    function init() {
+      innerBalls.length = 0;
+      for (let i = 0; i < MAX_BALLS; i++) spawnBall();
+    }
+
+    init();
+
+    // Draw the main split ball (top blue with "1", bottom red with "0")
+    function drawMainBall() {
+      // Top half - blue "1"
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, mainRadius, Math.PI, 0, false); // top semicircle
+      ctx.closePath();
+      ctx.fillStyle = '#1e90ff'; // blue
+      ctx.fill();
+
+      // Bottom half - red "0"
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, mainRadius, 0, Math.PI, false); // bottom semicircle
+      ctx.closePath();
+      ctx.fillStyle = '#e74c3c'; // red
+      ctx.fill();
+
+      // Overlay the numbers
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 28px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      // "1" on top half
+      ctx.fillText('1', centerX, centerY - mainRadius * 0.45);
+      // "0" on bottom half
+      ctx.fillText('0', centerX, centerY + mainRadius * 0.45);
+
+      // Optional subtle border around the main ball
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, mainRadius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    let lastTime = performance.now();
+
+    function loop(now) {
+      const dt = Math.min(0.033, (now - lastTime) / 1000);
+      lastTime = now;
+
+      // Clear
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw main ball halves (and numbers)
+      drawMainBall();
+
+      // Update and draw inner balls
+      for (const b of innerBalls) b.update(dt);
+      for (const b of innerBalls) b.draw(ctx);
+
+      // Optional: spawn more balls over time (keeps within MAX_BALLS)
+      // (Commented out to keep initial set stable; uncomment to enable)
+      // if (innerBalls.length < MAX_BALLS) {
+      //   spawnBall();
+      // }
+
+      requestAnimationFrame(loop);
+    }
+
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

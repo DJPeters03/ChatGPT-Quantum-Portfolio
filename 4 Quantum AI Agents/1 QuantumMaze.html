@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Quantum Collapse Maze — 5-Step Superposition Game</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#0f1730; --ink:#e8eefc; --mut:#9fb3ff; --ok:#7ee787; --warn:#ff7b72; --gold:#ffd166; --grid:#ffffff18; --line:#ffffff2b;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+  #wrap{position:fixed; inset:0; display:grid; grid-template-columns:minmax(300px,360px) 1fr; grid-template-rows:100%;}
+  aside{border-right:1px solid #ffffff22; background:var(--panel); padding:12px; overflow:auto}
+  main{position:relative}
+  canvas{width:100%;height:100%;display:block; background:radial-gradient(1200px 800px at 70% -20%, #1b2a5a33, transparent)}
+  h1{font-size:16px;margin:0 0 8px}
+  .row{display:flex; gap:8px; align-items:center; margin:8px 0}
+  .row label{flex:1; color:var(--mut)}
+  .row input[type="range"]{flex:2}
+  .btn{appearance:none; border:1px solid #ffffff22; background:#1a2444; color:var(--ink); padding:8px 10px; border-radius:10px; cursor:pointer}
+  .btn:hover{filter:brightness(1.1)}
+  .btn:active{transform:translateY(1px)}
+  .pill{display:inline-block; border:1px solid #ffffff22; padding:4px 8px; border-radius:999px; background:#121a33; color:var(--mut)}
+  .stat{display:grid; grid-template-columns:auto 1fr; gap:6px 10px; margin-top:8px}
+  .stat span{color:var(--mut)}
+  .hr{height:1px;background:var(--line);margin:10px 0}
+  .note{color:#bcd1ff; font-size:12px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <aside>
+    <h1>Quantum Collapse Maze</h1>
+    <div class="row">
+      <button id="btnStart" class="btn">New Game</button>
+      <button id="btnStep" class="btn">Measure (Step)</button>
+    </div>
+    <div class="row">
+      <button id="btnAuto" class="btn">Auto: Off</button>
+      <button id="btnReset" class="btn">Reset</button>
+    </div>
+    <div class="row">
+      <label>n (collapses)</label>
+      <input id="nSteps" type="range" min="1" max="9" value="5" />
+      <span class="pill" id="nLabel">5</span>
+    </div>
+    <div class="row">
+      <label>Bias p(+dir) <span id="axisLabel" class="pill">x: right</span></label>
+      <input id="bias" type="range" min="0" max="1" value="0.5" step="0.01" />
+      <span class="pill" id="biasLabel">0.50</span>
+    </div>
+    <div class="row">
+      <label>Auto speed (ms)</label>
+      <input id="speed" type="range" min="50" max="1000" value="300" step="10" />
+      <span class="pill" id="speedLabel">300</span>
+    </div>
+    <div class="row">
+      <button id="btnHadamard" class="btn">Reset to 50/50 (H)</button>
+      <button id="btnPeek" class="btn">Peek: Hidden</button>
+    </div>
+    <div class="hr"></div>
+    <div class="stat">
+      <span>Step:</span><strong id="stepStat">0</strong>
+      <span>Total n:</span><strong id="nStat">5</strong>
+      <span>State |ψ⟩:</span><strong id="psiStat">0.71|+⟩ + 0.71|−⟩</strong>
+      <span>Outcome bits:</span><strong id="bitsStat">—</strong>
+      <span>Target path:</span><strong id="targetStat">hidden</strong>
+      <span>Result:</span><strong id="resultStat">—</strong>
+    </div>
+    <div class="hr"></div>
+    <p class="note">
+      Rules: The qubit starts at the center in a superposition. Each measurement <em>collapses</em> one axis:<br>
+      step 1: x (left/right), step 2: y (down/up), step 3: x, step 4: y, step 5: x (etc.). After each collapse, it
+      re-prepares in a new superposition for the <em>next</em> axis. There are 2^n possible end points. Reach the hidden exit in n steps!
+    </p>
+  </aside>
+  <main>
+    <canvas id="c"></canvas>
+  </main>
+</div>
+<script>
+(function(){
+  const $ = sel => document.querySelector(sel);
+  const c = $('#c');
+  const ctx = c.getContext('2d');
+  let W=0,H=0; const DPR = Math.max(1, window.devicePixelRatio||1);
+  function resize(){ W = c.clientWidth; H = c.clientHeight; c.width = W*DPR; c.height = H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0); draw(); }
+  window.addEventListener('resize', resize, {passive:true});
+
+  // UI elements
+  const btnStart = $('#btnStart');
+  const btnStep = $('#btnStep');
+  const btnAuto = $('#btnAuto');
+  const btnReset = $('#btnReset');
+  const nSteps = $('#nSteps');
+  const nLabel = $('#nLabel');
+  const bias = $('#bias');
+  const biasLabel = $('#biasLabel');
+  const axisLabel = $('#axisLabel');
+  const speed = $('#speed');
+  const speedLabel = $('#speedLabel');
+  const btnHadamard = $('#btnHadamard');
+  const btnPeek = $('#btnPeek');
+
+  const stepStat = $('#stepStat');
+  const nStat = $('#nStat');
+  const psiStat = $('#psiStat');
+  const bitsStat = $('#bitsStat');
+  const targetStat = $('#targetStat');
+  const resultStat = $('#resultStat');
+
+  // Game state
+  let n = 5;
+  let step = 0;
+  let pos = {x:0,y:0};
+  let bits = [];// logical +dir=1, -dir=0 in the current axis
+  let targetBits = [];
+  let peek = false;
+  let auto = false;
+  let autoTimer = null;
+
+  function randChoice(){ return Math.random() < bias.value; }
+  function formatPsi(){
+    const p = parseFloat(bias.value);
+    const a = Math.sqrt(p).toFixed(2);
+    const b = Math.sqrt(1-p).toFixed(2);
+    return `${a}|+⟩ + ${b}|−⟩`;
+  }
+  function axisAtStep(k){ return (k % 2 === 1) ? 'y' : 'x'; } // step 1→y? Wait: define step index 0-based
+  // We'll define measurement order: 0:x, 1:y, 2:x, 3:y, 4:x ...
+  function axisByIndex(i){ return (i % 2 === 0) ? 'x' : 'y'; }
+  function plusDirLabel(axis){ return axis==='x' ? 'x: right' : 'y: up'; }
+
+  function resetState(){
+    step = 0; pos = {x:0,y:0}; bits = []; resultStat.textContent = '—';
+    updateAxisLabel();
+    updateStats();
+    draw();
+  }
+
+  function newGame(){
+    n = parseInt(nSteps.value,10);
+    // Choose a random target bitstring of length n
+    targetBits = Array.from({length:n}, (_,i)=> Math.random()<0.5?0:1);
+    resetState();
+  }
+
+  function measureOnce(){
+    if(step>=n){ return; }
+    const axis = axisByIndex(step);
+    const plus = randChoice(); // true → +dir (right/up), false → −dir (left/down)
+    bits.push(plus?1:0);
+    if(axis==='x') pos.x += plus?+1:-1; else pos.y += plus?+1:-1;
+    step++;
+    updateAxisLabel();
+    updateStats();
+    draw();
+    if(step===n){
+      // check win
+      const win = arraysEq(bits, targetBits);
+      resultStat.textContent = win? '✅ Reached EXIT!' : '❌ Missed. Try again';
+    }
+  }
+
+  function arraysEq(a,b){ if(a.length!==b.length) return false; for(let i=0;i<a.length;i++){ if(a[i]!==b[i]) return false;} return true; }
+
+  function updateAxisLabel(){
+    if(step>=n){ axisLabel.textContent = 'done'; return; }
+    const axis = axisByIndex(step);
+    axisLabel.textContent = plusDirLabel(axis);
+  }
+
+  function updateStats(){
+    nLabel.textContent = String(nSteps.value);
+    stepStat.textContent = String(step);
+    nStat.textContent = String(n);
+    psiStat.textContent = formatPsi();
+    bitsStat.textContent = bits.length? bits.join('') : '—';
+    targetStat.textContent = peek? targetBits.join('') : 'hidden';
+    biasLabel.textContent = parseFloat(bias.value).toFixed(2);
+    speedLabel.textContent = speed.value;
+  }
+
+  function stopAuto(){ auto=false; btnAuto.textContent = 'Auto: Off'; if(autoTimer){ clearInterval(autoTimer); autoTimer=null; } }
+  function startAuto(){ stopAuto(); auto=true; btnAuto.textContent = 'Auto: On'; autoTimer = setInterval(()=>{
+    if(step>=n){ stopAuto(); return; }
+    measureOnce();
+  }, parseInt(speed.value,10)); }
+
+  // Rendering
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    // Grid
+    const cell = Math.max(24, Math.min(W,H) / 14);
+    const maxX = Math.ceil((n+1)/2)+1; // ensure room horizontally
+    const maxY = Math.ceil(n/2)+1;     // room vertically
+    const origin = {x: W/2, y: H/2};
+
+    // Draw faint grid
+    ctx.save();
+    ctx.translate(origin.x, origin.y);
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1;
+    for(let gx=-maxX-2; gx<=maxX+2; gx++){
+      line(gx*cell, -(maxY+2)*cell, gx*cell, (maxY+2)*cell);
+    }
+    for(let gy=-maxY-2; gy<=maxY+2; gy++){
+      line(-(maxX+2)*cell, gy*cell, (maxX+2)*cell, gy*cell);
+    }
+
+    // Draw target exit portal at target endpoint
+    const targetPos = endpointFromBits(targetBits);
+    drawExit(targetPos.x*cell, -targetPos.y*cell, cell);
+
+    // Draw superposition "cloud" for NEXT measurement if not finished
+    if(step<n){
+      const axis = axisByIndex(step);
+      const pPlus = parseFloat(bias.value);
+      const here = {x:pos.x*cell, y:-pos.y*cell};
+      if(axis==='x'){
+        drawGhost(here.x + cell, here.y, pPlus, cell);
+        drawGhost(here.x - cell, here.y, 1-pPlus, cell);
+      }else{
+        drawGhost(here.x, here.y - cell, pPlus, cell); // up is -y in canvas
+        drawGhost(here.x, here.y + cell, 1-pPlus, cell);
+      }
+    }
+
+    // Draw path taken so far
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#8fdfff';
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    let cur = {x:0,y:0};
+    for(let i=0;i<bits.length;i++){
+      const axis = axisByIndex(i);
+      if(axis==='x') cur.x += bits[i]?+1:-1; else cur.y += bits[i]?+1:-1;
+      ctx.lineTo(cur.x*cell, -cur.y*cell);
+    }
+    ctx.stroke();
+
+    // Draw current qubit marker
+    const qx = pos.x*cell, qy = -pos.y*cell;
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = '#7ee787';
+    ctx.shadowBlur = 12;
+    circle(qx,qy,6,true);
+    ctx.shadowBlur = 0;
+
+    // Draw start
+    ctx.fillStyle = '#ffd166'; circle(0,0,4,true);
+
+    ctx.restore();
+  }
+
+  function endpointFromBits(bits){
+    let p={x:0,y:0};
+    for(let i=0;i<bits.length;i++){
+      const axis = axisByIndex(i);
+      if(axis==='x') p.x += bits[i]?+1:-1; else p.y += bits[i]?+1:-1;
+    }
+    return p;
+  }
+
+  function line(x1,y1,x2,y2){ ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); }
+  function circle(x,y,r,fill=false){ ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); fill?ctx.fill():ctx.stroke(); }
+  function drawGhost(x,y,p,cell){
+    const r = 10 + 10*p;
+    ctx.save();
+    ctx.globalAlpha = 0.15 + 0.35*p;
+    ctx.fillStyle = '#7ee787';
+    circle(x,y,r,true);
+    ctx.globalAlpha = 0.6;
+    ctx.strokeStyle = 'rgba(126,231,135,0.6)';
+    circle(x,y,r+6,false);
+    ctx.restore();
+
+    // Probability label
+    ctx.save();
+    ctx.fillStyle = 'rgba(232,238,252,0.85)';
+    ctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${(p*100).toFixed(0)}%`, x, y- (r+12));
+    ctx.restore();
+  }
+
+  function drawExit(x,y,cell){
+    ctx.save();
+    // portal rings
+    for(let i=0;i<3;i++){
+      ctx.strokeStyle = `rgba(255,209,102,${0.5-0.12*i})`;
+      ctx.lineWidth = 3-i;
+      circle(x,y, 12+6*i,false);
+    }
+    // star
+    ctx.fillStyle = 'rgba(255,209,102,0.9)';
+    star(x,y, 8, 5);
+    ctx.restore();
+  }
+  function star(x,y,r,n){
+    const a = Math.PI/n; ctx.beginPath();
+    for(let i=0;i<2*n;i++){
+      const R = (i%2===0)? r : r*0.45;
+      const ang = -Math.PI/2 + i*a;
+      ctx.lineTo(x+R*Math.cos(ang), y+R*Math.sin(ang));
+    }
+    ctx.closePath(); ctx.fill();
+  }
+
+  // Event wiring
+  btnStart.onclick = newGame;
+  btnReset.onclick = resetState;
+  btnStep.onclick = measureOnce;
+  btnAuto.onclick = ()=>{ auto? stopAuto() : startAuto(); };
+  nSteps.oninput = ()=>{ nLabel.textContent = nSteps.value; n = parseInt(nSteps.value,10); newGame(); };
+  bias.oninput = updateStats;
+  speed.oninput = updateStats;
+  btnHadamard.onclick = ()=>{ bias.value = 0.5; updateStats(); draw(); };
+  btnPeek.onclick = ()=>{ peek = !peek; btnPeek.textContent = peek? 'Peek: Shown' : 'Peek: Hidden'; updateStats(); };
+
+  // Init
+  resize();
+  newGame();
+})();
+</script>
+</body>
+</html>

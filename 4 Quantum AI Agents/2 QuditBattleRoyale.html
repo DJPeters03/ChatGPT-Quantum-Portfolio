@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Qudit Battle Royale — Total Rounds & Tie-Skip</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#121a31; --card:#0f1630; --fg:#e8eefc; --muted:#9fb3ff;
+    --accent:#7ee787; --accent2:#58a6ff; --warn:#ff7b72; --grid:#223057; --bar:#8ab6ff;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{height:100%; margin:0; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+  #app{display:grid; grid-template-rows:auto auto 1fr; gap:12px; padding:12px}
+  header{display:flex; flex-wrap:wrap; align-items:center; gap:10px; background:var(--panel); border:1px solid #1e2b54; padding:10px 12px; border-radius:12px}
+  header h1{font-size:16px; margin:0 10px 0 0; color:var(--muted)}
+  .ctrl{display:flex; align-items:center; gap:8px; padding:6px 10px; background:var(--card); border:1px solid #1b274d; border-radius:10px}
+  .ctrl label{opacity:.9}
+  .ctrl input[type="range"]{width:140px}
+  .ctrl input[type="number"]{width:84px; padding:4px 6px; background:#0b132e; color:var(--fg); border:1px solid #203165; border-radius:8px}
+  button{cursor:pointer; padding:8px 12px; border-radius:10px; border:1px solid #213463; background:#152045; color:#fff}
+  button.primary{background:linear-gradient(180deg,#2a3f7e,#1b2b58); border-color:#3553a6}
+  button:disabled{opacity:.5; cursor:not-allowed}
+
+  #topRow{display:grid; grid-template-columns: 1.2fr .8fr; gap:12px}
+  .card{background:var(--panel); border:1px solid #1e2b54; border-radius:12px; padding:10px}
+  .card h2{margin:0 0 8px 2px; font-size:14px; color:var(--muted)}
+  canvas{width:100%; height:auto; display:block; background:#0b1226; border-radius:10px}
+  #labels{display:grid; grid-template-columns:repeat(10,1fr); gap:4px; margin-top:6px; font-size:12px; color:#bcd1ff; text-align:center}
+  #labels span{padding:2px 0; background:#0e1838; border:1px solid #1b2a57; border-radius:6px}
+
+  #qtWrap{background:var(--panel); border:1px solid #1e2b54; border-radius:12px; padding:10px; height:84vh; overflow:auto}
+  #qtWrap h2{margin:0 0 10px 2px; font-size:14px; color:var(--muted)}
+  #qtables{display:grid; grid-template-columns:repeat(10,18px); gap:3px}
+  .qcell{width:18px; height:18px; border-radius:4px; border:1px solid #27386a}
+  .qrowLabel{grid-column:1 / -1; color:#9fb3ff; font-size:11px; margin:6px 0 0}
+
+  #legend{display:flex; align-items:center; gap:8px; font-size:12px; color:#bcd1ff; margin-top:6px}
+  #grad{height:8px; width:180px; border-radius:5px; background:linear-gradient(90deg,#3a6cff,#6a8cff,#95a7ff,#ffc47a,#ff935a)}
+
+  .meta{display:flex; gap:12px; flex-wrap:wrap; color:#c8d7ff; font-size:12px; margin-top:8px}
+  .pill{background:#0e1836; border:1px solid #203165; padding:6px 8px; border-radius:999px}
+
+  #brPanel{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+  #log{height:22vh; overflow:auto; background:#0b1226; border:1px solid #1b2a57; border-radius:10px; padding:8px; font-size:12px}
+  #log .e{margin:4px 0; color:#cfe0ff}
+  #winners{display:none; padding:12px; background:#0b1226; border:1px dashed #2d58a8; border-radius:10px; margin-top:8px}
+  #winners h3{margin:0 0 8px; color:#7ee787}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Qudit Battle Royale — 100 agents, actions 0–9</h1>
+    <div class="ctrl" title="Exploration rate (ε). Higher = more random actions.">
+      <label for="eps">ε</label>
+      <input id="eps" type="range" min="0" max="1" step="0.01" value="0.10"/>
+      <span id="epsVal">0.10</span>
+    </div>
+    <div class="ctrl" title="Learning rate (α). How fast Q updates.">
+      <label for="alpha">α</label>
+      <input id="alpha" type="range" min="0" max="1" step="0.01" value="0.50"/>
+      <span id="alphaVal">0.50</span>
+    </div>
+    <div class="ctrl" title="Round duration (ms). Also scales shuffle vs collapse time.">
+      <label for="speed">Speed</label>
+      <input id="speed" type="range" min="400" max="4000" step="50" value="1200"/>
+      <span id="speedVal">1200 ms</span>
+    </div>
+    <button id="start" class="primary">Start</button>
+    <button id="pause">Pause</button>
+    <button id="reset">Reset</button>
+  </header>
+
+  <div id="topRow">
+    <div class="card">
+      <h2>Shuffle → Collapse (agents on left; counts chart below)</h2>
+      <canvas id="agentCanvas" width="900" height="360"></canvas>
+      <div id="labels"></div>
+      <canvas id="barCanvas" width="900" height="180" style="margin-top:10px"></canvas>
+      <div class="meta">
+        <div class="pill">Total rounds: <span id="stage">0</span></div>
+        <div class="pill">Round in stage: <span id="round">0</span>/<span id="stageLen">?</span></div>
+        <div class="pill">Agents remaining: <span id="remain">0</span></div>
+        <div class="pill">Avg reward (last): <span id="avgReward">0.00</span></div>
+        <div class="pill">Most/Least value: <span id="extrema">–</span></div>
+      </div>
+      <div id="brPanel" class="meta">
+        <div class="pill">Last elimination: <span id="elimInfo">–</span></div>
+      </div>
+      <div id="winners">
+        <h3>Winners</h3>
+        <div id="wA"></div>
+        <div id="wB"></div>
+      </div>
+      <div id="log" aria-label="Elimination log"></div>
+    </div>
+
+    <div class="card" id="qtWrap">
+      <h2>Q‑Tables Heatmap (rows = agents × 10 actions)</h2>
+      <div id="legend"><span style="opacity:.75">low</span><div id="grad"></div><span style="opacity:.75">high</span></div>
+      <div id="qtables" aria-label="Heatmap of Q values"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ====== Parameters ======
+const START_AGENTS = 100;
+const N_ACTIONS = 10; // actions 0..9
+const STAGE_SEQUENCE = [10,10,10,5,5,3,3,1,1,1];
+let epsilon = 0.10;  // exploration
+let alpha = 0.50;    // learning rate
+let roundDuration = 1200; // ms per round
+let running = false;
+let stageIdx = 0;     // number of completed elimination windows
+let roundInStage = 0; // rounds accumulated toward current window
+let totalRounds = 0;  // running total rounds (displayed as "Total rounds")
+
+// Phase timings as fractions of roundDuration
+const SHUFFLE_FRAC = 0.45;  // shuffle time
+const COLLAPSE_FRAC = 0.45; // animate to bins
+const UPDATE_FRAC = 0.10;   // update & settle
+
+function currentStageRounds(){
+  return STAGE_SEQUENCE[Math.min(stageIdx, STAGE_SEQUENCE.length-1)];
+}
+
+// ====== DOM ======
+const agentCanvas = document.getElementById('agentCanvas');
+const barCanvas   = document.getElementById('barCanvas');
+const ctxA = agentCanvas.getContext('2d');
+const ctxB = barCanvas.getContext('2d');
+const qtables = document.getElementById('qtables');
+
+const stageEl = document.getElementById('stage');
+const roundEl = document.getElementById('round');
+const remainEl= document.getElementById('remain');
+const avgRewardEl = document.getElementById('avgReward');
+const extremaEl = document.getElementById('extrema');
+const elimInfoEl = document.getElementById('elimInfo');
+const winnersBox = document.getElementById('winners');
+const wAEl = document.getElementById('wA');
+const wBEl = document.getElementById('wB');
+const logEl = document.getElementById('log');
+
+// Controls
+const epsInput   = document.getElementById('eps');
+const epsVal     = document.getElementById('epsVal');
+const alphaInput = document.getElementById('alpha');
+const alphaVal   = document.getElementById('alphaVal');
+const speedInput = document.getElementById('speed');
+const speedVal   = document.getElementById('speedVal');
+const startBtn   = document.getElementById('start');
+const pauseBtn   = document.getElementById('pause');
+const resetBtn   = document.getElementById('reset');
+
+// Labels 0..9 under agent canvas
+(function buildLabels(){
+  const labels = document.getElementById('labels');
+  for(let k=0;k<N_ACTIONS;k++){
+    const s=document.createElement('span'); s.textContent=String(k); labels.appendChild(s);
+  }
+})();
+
+// ====== Agent Model ======
+class Agent {
+  constructor(id){
+    this.id = id;
+    this.Q = new Array(N_ACTIONS).fill(0);
+    this.action = 0; // 0..9
+    this.score = 0;  // running points
+    this.majorityHits = 0; // times chosen majority number
+    this.alive = true;
+    // visual position
+    this.x = Math.random()*agentCanvas.width*0.9 + agentCanvas.width*0.05;
+    this.y = Math.random()*agentCanvas.height*0.7 + agentCanvas.height*0.15;
+    this.tx = this.x; // target x
+    this.ty = this.y; // target y
+    this.color = agentColor(id);
+  }
+  resetQ(){ for(let a=0;a<N_ACTIONS;a++) this.Q[a]=0; }
+  chooseAction(){
+    if (Math.random() < epsilon){
+      this.action = (Math.random()*N_ACTIONS)|0;
+    } else {
+      // argmax with random tie-break
+      let maxQ = -Infinity; let best=[];
+      for (let i=0;i<N_ACTIONS;i++){
+        const q=this.Q[i];
+        if (q>maxQ){ maxQ=q; best=[i]; }
+        else if (q===maxQ){ best.push(i); }
+      }
+      this.action = best[(Math.random()*best.length)|0];
+    }
+    return this.action;
+  }
+  updateQ(reward){
+    const a = this.action;
+    this.Q[a] += alpha*(reward - this.Q[a]); // gamma=0 bandit update
+    this.score += reward;
+  }
+}
+
+// Nicely spread agent colors
+function agentColor(i){
+  const h = (i*3.6) % 360; // 100 agents → ~3.6 deg steps
+  return `hsl(${h} 80% 65%)`;
+}
+
+// ====== Simulation State ======
+let agents=[];
+let aliveAgents=[]; // refs subset where ag.alive===true
+let counts = new Array(N_ACTIONS).fill(0);
+let windowCounts = new Array(N_ACTIONS).fill(0); // across window
+let lastRewards = [];
+let phase = 'idle';
+let phaseStart = 0; // timestamp
+
+// Heatmap cells cache for fast updates
+let qCells = []; // array of arrays [agent-index][action] → div
+
+function initAgents(){
+  agents = [];
+  qtables.innerHTML='';
+  qCells = [];
+  for(let i=0;i<START_AGENTS;i++){
+    const ag = new Agent(i);
+    agents.push(ag);
+
+    // One row label every 10 agents for readability
+    if (i%10===0){
+      const lbl=document.createElement('div');
+      lbl.className='qrowLabel';
+      lbl.textContent=`Agents ${i}–${Math.min(i+9,START_AGENTS-1)}`;
+      qtables.appendChild(lbl);
+    }
+    const rowCells=[];
+    for(let a=0;a<N_ACTIONS;a++){
+      const c=document.createElement('div');
+      c.className='qcell';
+      c.title=`Agent ${i} • a=${a} • Q=0.00`;
+      c.style.background = valueToColor(0, -0.1, 2.0);
+      qtables.appendChild(c);
+      rowCells.push(c);
+    }
+    qCells.push(rowCells);
+  }
+  aliveAgents = agents.slice();
+  lastRewards = new Array(agents.length).fill(0);
+  counts.fill(0);
+  windowCounts.fill(0);
+  stageIdx = 0;
+  roundInStage = 0;
+  totalRounds = 0;
+  winnersBox.style.display='none';
+  logEl.innerHTML='';
+  updateMeta(0,'-');
+  remainEl.textContent = String(aliveAgents.length);
+  elimInfoEl.textContent = '–';
+  drawAgentScene(0);
+  drawBars(new Array(N_ACTIONS).fill(0));
+}
+
+// ====== Color mapping (heatmap) ======
+function valueToColor(val, vmin=-0.1, vmax=2.0){
+  const t = Math.max(0, Math.min(1, (val - vmin) / (vmax - vmin + 1e-9)));
+  const stops = [
+    [58,108,255], [106,140,255], [255,196,122], [255,147,90]
+  ];
+  const idx = Math.min(2, Math.floor(t*3));
+  const frac = t*3 - idx;
+  const a = stops[idx], b = stops[idx+1];
+  const r = Math.round(a[0] + (b[0]-a[0])*frac);
+  const g = Math.round(a[1] + (b[1]-a[1])*frac);
+  const bl= Math.round(a[2] + (b[2]-a[2])*frac);
+  return `rgb(${r},${g},${bl})`;
+}
+
+// ====== Drawing: Agent Canvas ======
+function drawAgentScene(t){
+  const w=agentCanvas.width, h=agentCanvas.height;
+  const ctx=ctxA;
+  ctx.clearRect(0,0,w,h);
+
+  // Columns
+  const pad=28; const left=pad; const right=w-pad; const top=18; const bottom=h-20;
+  const cols=N_ACTIONS; const colW=(right-left)/cols;
+
+  // grid
+  ctx.strokeStyle = '#18234b';
+  ctx.lineWidth = 1;
+  for(let i=0;i<=cols;i++){
+    const x = left + i*colW;
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+  }
+  ctx.strokeStyle = '#1a2b57';
+  ctx.strokeRect(left, top, right-left, bottom-top);
+
+  // agents
+  for(const ag of aliveAgents){
+    ctx.beginPath();
+    ctx.fillStyle = ag.color;
+    ctx.arc(ag.x, ag.y, 5, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+// ====== Drawing: Bar Chart ======
+function drawBars(countsArr){
+  const w=barCanvas.width, h=barCanvas.height;
+  const ctx=ctxB;
+  ctx.clearRect(0,0,w,h);
+  const maxC = Math.max(1, ...countsArr);
+  const pad=28; const left=pad; const right=w-pad; const bottom=h-20; const top=12;
+  const barW = (right-left)/N_ACTIONS - 6;
+
+  // axis
+  ctx.strokeStyle='#1a2b57'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(left, bottom); ctx.lineTo(right, bottom); ctx.stroke();
+
+  // bars
+  for(let i=0;i<N_ACTIONS;i++){
+    const x = left + i*((right-left)/N_ACTIONS) + 3;
+    const bh = (countsArr[i]/maxC) * (bottom-top);
+    ctx.fillStyle = '#8ab6ff';
+    ctx.fillRect(x, bottom-bh, barW, bh);
+    ctx.fillStyle = '#bcd1ff';
+    ctx.font = '12px system-ui';
+    ctx.textAlign='center';
+    ctx.fillText(String(countsArr[i]||0), x+barW/2, bottom+14);
+  }
+}
+
+// ====== Round Phases ======
+function beginRound(){
+  phase = 'shuffle';
+  phaseStart = performance.now();
+  requestAnimationFrame(updatePhase);
+}
+
+function chooseActionsAndTargets(){
+  counts.fill(0);
+  for(const ag of aliveAgents){
+    const a = ag.chooseAction();
+    counts[a]++;
+  }
+  // positions into bins
+  const w=agentCanvas.width, h=agentCanvas.height;
+  const pad=28; const left=pad; const right=w-pad; const top=18; const bottom=h-20;
+  const colW=(right-left)/N_ACTIONS;
+
+  const stackIdx = new Array(N_ACTIONS).fill(0);
+  for(const ag of aliveAgents){
+    const a = ag.action;
+    const cx = left + a*colW + colW/2;
+    const idx = stackIdx[a]++;
+    const row = Math.floor(idx/10);
+    const col = idx%10;
+    const spacing = 12;
+    ag.tx = cx + (col-4.5)*9;
+    ag.ty = bottom - row*spacing - 12;
+  }
+}
+
+function updatePhase(){
+  if (!running) return;
+
+  const now = performance.now();
+  const elapsed = now - phaseStart;
+  const shuffleTime = roundDuration*SHUFFLE_FRAC;
+  const collapseTime = roundDuration*COLLAPSE_FRAC;
+
+  if (phase==='shuffle'){
+    for(const ag of aliveAgents){
+      ag.x += (Math.random()-0.5)*2.2;
+      ag.y += (Math.random()-0.5)*2.2;
+      ag.x = Math.max(12, Math.min(agentCanvas.width-12, ag.x));
+      ag.y = Math.max(12, Math.min(agentCanvas.height-12, ag.y));
+    }
+    drawAgentScene(now);
+    if (elapsed >= shuffleTime){
+      chooseActionsAndTargets();
+      phase = 'collapse';
+      phaseStart = now;
+    }
+    requestAnimationFrame(updatePhase);
+  }
+  else if (phase==='collapse'){
+    const t = Math.max(0, Math.min(1, elapsed/collapseTime));
+    const e = t<0.5 ? 2*t*t : -1+(4-2*t)*t;
+    for(const ag of aliveAgents){
+      ag.x = ag.x + (ag.tx - ag.x)*e*0.12;
+      ag.y = ag.y + (ag.ty - ag.y)*e*0.12;
+    }
+    drawAgentScene(now);
+    drawBars(counts);
+    if (elapsed >= collapseTime){
+      for(const ag of aliveAgents){ ag.x = ag.tx; ag.y = ag.ty; }
+
+      // rewards
+      const maxC = Math.max(...counts);
+      const minC = Math.min(...counts);
+      let sumR=0;
+      const majorityActions = new Set();
+      const leastActions = new Set();
+      counts.forEach((c,i)=>{ if(c===maxC) majorityActions.add(i); if(c===minC) leastActions.add(i); });
+      for (const ag of aliveAgents){
+        let reward;
+        if (majorityActions.has(ag.action)) {
+          reward = 2;
+          ag.majorityHits++;
+        } else if (leastActions.has(ag.action)) {
+          reward = -1;
+        } else {
+          reward = -0.1;
+        }
+        ag.updateQ(reward);
+        sumR+=reward;
+      }
+      const avgR = sumR/Math.max(1,aliveAgents.length);
+      updateHeatmap();
+
+      // advance counters
+      roundInStage++;
+      totalRounds++;
+      windowCounts = windowCounts.map((v,i)=>v+counts[i]);
+      updateMeta(avgR, describeExtrema(counts));
+
+      phase = 'settle';
+      phaseStart = now;
+    }
+    requestAnimationFrame(updatePhase);
+  }
+  else if (phase==='settle'){
+    if (elapsed >= roundDuration*UPDATE_FRAC){
+      if (aliveAgents.length <= 2){
+        declareWinners();
+        running=false;
+        return;
+      }
+      let didEliminate = false;
+      if (roundInStage >= currentStageRounds()){
+        didEliminate = performElimination();
+        if (aliveAgents.length <= 2){
+          declareWinners();
+          running=false;
+          return;
+        }
+        if (didEliminate){
+          // start a fresh window only if we actually eliminated
+          roundInStage = 0;
+          windowCounts.fill(0);
+          stageIdx++;
+        }
+      }
+      roundEl.textContent = String(roundInStage);
+      beginRound();
+    } else {
+      requestAnimationFrame(updatePhase);
+    }
+  }
+}
+
+const stageLenEl = document.getElementById('stageLen');
+function updateMeta(avgReward, extremaStr){
+  stageLenEl.textContent = String(currentStageRounds());
+  avgRewardEl.textContent = avgReward.toFixed(2);
+  extremaEl.textContent = extremaStr;
+  remainEl.textContent = String(aliveAgents.length);
+  roundEl.textContent = String(roundInStage);
+  stageEl.textContent = String(totalRounds); // show Total rounds
+}
+
+function describeExtrema(counts){
+  let maxC=Math.max(...counts), minC=Math.min(...counts);
+  const most=[], least=[];
+  counts.forEach((c,i)=>{ if(c===maxC) most.push(i); if(c===minC) least.push(i); });
+  return `most ${most.join(', ')} • least ${least.join(', ')}`;
+}
+
+// ====== Heatmap Update ======
+function updateHeatmap(){
+  let vmin=Infinity, vmax=-Infinity;
+  for(const ag of aliveAgents){
+    for (let a=0;a<N_ACTIONS;a++){
+      const v=ag.Q[a]; if (v<vmin) vmin=v; if (v>vmax) vmax=v;
+    }
+  }
+  vmin = Math.min(vmin, 0);
+  vmax = Math.max(vmax, 2);
+
+  for(const ag of agents){
+    for(let a=0;a<N_ACTIONS;a++){
+      const v = ag.Q[a];
+      const cell = qCells[ag.id][a];
+      cell.style.background = valueToColor(v, vmin, vmax);
+      cell.title = `Agent ${ag.id} • a=${a} • Q=${v.toFixed(3)} • ${ag.alive?'alive':'OUT'}`;
+      cell.style.opacity = ag.alive ? '1' : '0.25';
+    }
+  }
+}
+
+// ====== Elimination Logic (with tie-skip) ======
+function performElimination(){
+  // Rank actions by frequency across the current window
+  const pairs = windowCounts.map((c,idx)=>({a:idx, c})).sort((p,q)=> p.c - q.c); // ascending
+
+  // If boundary between the 9th eliminated and 10th kept has a tie, skip elimination
+  const cutoff = pairs[8].c; // 9th (0-indexed) count
+  const top = pairs[9].c;    // 10th count
+  if (cutoff === top){
+    const msg = `Tie on elimination window (counts ${cutoff}). No elimination — continuing.`;
+    elimInfoEl.textContent = msg;
+    const div = document.createElement('div');
+    div.className='e';
+    div.textContent = msg;
+    logEl.prepend(div);
+    return false; // did not eliminate
+  }
+
+  const elimActions = new Set(pairs.slice(0,9).map(p=>p.a));
+
+  const survivors = [];
+  const eliminated = [];
+  for (const ag of aliveAgents){
+    if (elimActions.has(ag.action)){
+      ag.alive = false;
+      eliminated.push(ag);
+    } else {
+      survivors.push(ag);
+    }
+  }
+  aliveAgents = survivors;
+
+  // Reset Q‑tables of survivors (fresh stage)
+  for (const ag of aliveAgents){ ag.resetQ(); }
+
+  const msg = `Eliminated ${eliminated.length} agents on actions [${[...elimActions].join(', ')}]`;
+  elimInfoEl.textContent = msg;
+  const div = document.createElement('div');
+  div.className='e';
+  div.textContent = msg;
+  logEl.prepend(div);
+
+  updateHeatmap();
+  remainEl.textContent = String(aliveAgents.length);
+  return true; // did eliminate
+}
+
+// ====== Winners ======
+function declareWinners(){
+  let winners = aliveAgents.slice(0,2);
+  if (aliveAgents.length === 1){
+    // pick the top second from eliminated by majorityHits as co‑winner
+    const eliminated = agents.filter(a=>!a.alive);
+    eliminated.sort((a,b)=> b.majorityHits - a.majorityHits);
+    winners = [aliveAgents[0], eliminated[0] || aliveAgents[0]];
+  }
+  winnersBox.style.display='block';
+  wAEl.textContent = `Agent ${winners[0].id} — times chosen majority number: ${winners[0].majorityHits}`;
+  wBEl.textContent = `Agent ${winners[1].id} — times chosen majority number: ${winners[1].majorityHits}`;
+}
+
+// ====== Controls ======
+startBtn.addEventListener('click', ()=>{ if (!running){ running = true; beginRound(); } });
+pauseBtn.addEventListener('click', ()=>{ running = false; });
+resetBtn.addEventListener('click', ()=>{ running = false; initAgents(); });
+
+epsInput.addEventListener('input', ()=>{ epsilon = parseFloat(epsInput.value); epsVal.textContent = epsilon.toFixed(2); });
+alphaInput.addEventListener('input', ()=>{ alpha   = parseFloat(alphaInput.value); alphaVal.textContent = alpha.toFixed(2); });
+speedInput.addEventListener('input', ()=>{ roundDuration = parseInt(speedInput.value,10); speedVal.textContent = `${roundDuration} ms`; });
+
+// ====== Boot ======
+initAgents();
+</script>
+</body>
+</html>
